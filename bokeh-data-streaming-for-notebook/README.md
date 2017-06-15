@@ -1,5 +1,5 @@
 
-### Bohek data streaming evaluation in the context of a Jupyter notebook
+### Bokeh data streaming evaluation in the context of a Jupyter notebook
 
 This is not production code! Just a proof of concept. A first step for discussions.
 
