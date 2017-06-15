@@ -3,7 +3,7 @@ from __future__ import print_function
 import logging
 import socket
 import datetime
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from math import ceil, pi
 import six
 
