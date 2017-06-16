@@ -512,7 +512,6 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
             except Exception as e:
                 self.exception(e)
 
-
 # ------------------------------------------------------------------------------
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
     """a data stream manager embedded a bokeh server"""
