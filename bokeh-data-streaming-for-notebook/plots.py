@@ -36,10 +36,6 @@ from bokeh.server.server import Server
 from tornado.ioloop import IOLoop
 
 from tools import *
-    
-# -- globals --------------------
-bokeh_output_redirected = False
-
 
 # ------------------------------------------------------------------------------
 class Children(OrderedDict):
@@ -341,8 +337,8 @@ class DataSource(Switchable):
 class Channel(NotebookCellContent, DataStreamEventHandler, Switchable):
     """single data stream channel"""
 
-    def __init__(self, name, data_sources=None, model_properties=None, notebook_cell=None):
-        NotebookCellContent.__init__(self, name, notebook_cell)
+    def __init__(self, name, data_sources=None, model_properties=None):
+        NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
         Switchable.__init__(self, self.switch_callback)
         # data sources
@@ -447,8 +443,8 @@ class Channel(NotebookCellContent, DataStreamEventHandler, Switchable):
 class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
     """data stream interface"""
 
-    def __init__(self, name, channels=None, notebook_cell=None):
-        NotebookCellContent.__init__(self, name, notebook_cell)
+    def __init__(self, name, channels=None):
+        NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
         Switchable.__init__(self, self.switch_callback)
         # channels
@@ -456,13 +452,13 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
         self._channels.register_add_callback(self._on_add_channel)
         self.add(channels)
 
-    @NotebookCellContent.cell_context.setter
-    def cell_context(self, cell_context):
-        """overwrites NotebookCellContent.cell_context.setter"""
-        assert (isinstance(cell_context, NotebookCellContext))
-        self._cell_context = cell_context
+    @NotebookCellContent.context.setter
+    def context(self, new_context):
+        """overwrites NotebookCellContent.context.setter"""
+        assert (isinstance(new_context, CellContext))
+        self._context = new_context
         for channel in self._channels.values():
-            channel.cell_context = cell_context
+            channel.context = new_context
 
     def add(self, channels):
         """add the specified channels"""
@@ -470,7 +466,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
 
     def _on_add_channel(self, channel):
         """called when a new channel is added to the data stream"""
-        channel.cell_context = self.cell_context
+        channel.context = self.context
         events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
         channel.register_event_handler(self, events)
 
@@ -494,6 +490,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
                 models.append(model)
         return models
 
+    @tracer
     def update(self):
         """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
         #print("data stream: {} update".format(self.name))
@@ -516,9 +513,9 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
     """a data stream manager embedded a bokeh server"""
 
-    def __init__(self, name, data_streams, update_period=1., notebook_cell=None, ip_addr=None):
+    def __init__(self, name, data_streams, update_period=1., ip_addr=None):
         # route output to current cell
-        NotebookCellContent.__init__(self, name, notebook_cell)
+        NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
         Switchable.__init__(self, self.switch_callback)
         # ip addr on which the server will be started
@@ -540,24 +537,24 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
         self._data_streams = list()
         self.add(data_streams)
 
-    @NotebookCellContent.cell_context.setter
-    def cell_context(self, cell_context):
-        """overwrites NotebookCellContent.cell_context.setter"""
-        assert (isinstance(cell_context, NotebookCellContext))
-        self._cell_context = cell_context
+    @NotebookCellContent.context.setter
+    def context(self, new_context):
+        """overwrites NotebookCellContent.context.setter"""
+        assert (isinstance(new_context, CellContext))
+        self._context = new_context
         for ds in self._data_streams:
-            ds.cell_context = cell_context
+            ds.context = new_context
 
     def add(self, ds):
         if isinstance(ds, DataStream):
-            ds.cell_context = self.cell_context
+            ds.context = self.context
             self.__register_event_handler(ds)
             self._data_streams.append(ds)
         elif isinstance(ds, (list, tuple)):
             for s in ds:
                 if not isinstance(s, DataStream):
                     raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
-                s.cell_context = self.cell_context
+                s.context = self.context
                 self.__register_event_handler(s)
                 self._data_streams.append(s)
         else:
@@ -622,17 +619,10 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
             self.__install_periodic_callbacks()
             self._stop_pending = False
             return
-        global bokeh_output_redirected
-        if bokeh_output_redirected:
-           self.debug("Bokeh output already redirected to Jupyter notebook")
-        else:
-            self.debug("redirecting Bokeh output to Jupyter notebook...")
-            output_notebook(hide_banner=True) 
-            bokeh_output_redirected = True
-            logging.getLogger('bokeh').setLevel(logging.CRITICAL)
-            logging.getLogger('tornado').setLevel(logging.CRITICAL)
-            logging.getLogger('fs.client.jupyter').setLevel(logging.ERROR)
-            self.debug("Bokeh output successfully redirected")
+        output_notebook(resources=INLINE, hide_banner=True) 
+        logging.getLogger('bokeh').setLevel(logging.CRITICAL)
+        logging.getLogger('tornado').setLevel(logging.CRITICAL)
+        logging.getLogger('fs.client.jupyter').setLevel(logging.ERROR)
         self.debug("starting Bokeh server...")
         self._srv = Server(
             {'/':  Application(FunctionHandler(self.__entry_point))},
@@ -788,7 +778,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # check input parameters
         assert (isinstance(data_streamer, DataStreamer))
         # route output to current cell
-        NotebookCellContent.__init__(self, name, kwargs.get('cell_context', None))
+        NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
         # data streamer
         self.data_streamer = data_streamer
@@ -887,7 +877,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._controls.close()
         if self._error_area:
             self._error_area.close()
-        self.cell_context.clear_output()
+        self.clear_output()
         self.__call_close_callbacks()
 
     def register_close_callback(self, cb):
@@ -931,7 +921,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
 
     def _show_error(self, err_desc):
         try:
-            with cell_context(*self.cell_context.context):
+            with cell_context(self.context):
                 err = "Oops, the following error occurred:\n"
                 err += err_desc
                 if not self._error_area:
@@ -963,7 +953,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # data streamer
         self._data_streamer = ds
         # route data streamer output to current cell
-        self._data_streamer.cell_context = self.cell_context
+        self._data_streamer.context = self.context
         # register event handler
         events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
         self._data_streamer.register_event_handler(self, events)
@@ -1642,11 +1632,13 @@ class SpectrumChannel(Channel):
 class ImageChannel(Channel):
     """image data source channel"""
 
-    def __init__(self, name, data_source=None, model_properties=None):
+    def __init__(self, name, data_source=None, model_properties=dict()):
         Channel.__init__(self, name, data_sources=[data_source], model_properties=model_properties)
         self.__reinitialize()
 
     def __reinitialize(self):
+        self._img_shape = None # full image shape
+        self._cur_row = 0 # current row index
         self._cds = None  # column data source
         self._mdl = None  # model
         self._xsc = None  # x scale
@@ -1654,8 +1646,7 @@ class ImageChannel(Channel):
         self._ird = None  # image renderer
         self._rrd = None  # rect renderer for hover trick
 
-    @classmethod
-    def __instanciate_data_source(cls):
+    def __instanciate_data_source(self):
         columns = dict()
         columns['x_scale_data'] = [[0]]
         columns['y_scale_data'] = [[0]]
@@ -1664,7 +1655,14 @@ class ImageChannel(Channel):
         columns['x_hover'] = [0]
         columns['y_hover'] = [0]
         columns['z_hover'] = [0]
-        columns['image'] = [np.zeros((2, 2))]
+        image_shape = self.model_properties.get('image_shape', None)
+        if image_shape is not None and isinstance(image_shape, tuple) and len(image_shape) == 2 and all(image_shape):
+            self._img_shape = image_shape
+        if self._img_shape is None:
+            image_shape = (2, 2)
+        data = np.empty(image_shape)
+        data.fill(np.nan)
+        columns['image'] = [data]
         return ColumnDataSource(data=columns)
 
     def __hover_callback(self):
@@ -1721,6 +1719,7 @@ class ImageChannel(Channel):
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
+
             self._mdl = None
             props = self._merge_properties(self.model_properties, kwargs)
             self._cds = self.__instanciate_data_source()
@@ -1794,15 +1793,20 @@ class ImageChannel(Channel):
             if empty_buffer:
                 nan_buffer = np.empty((2,2))
                 nan_buffer.fill(np.nan)
-            xpn = 0
+            elif self._img_shape is not None and self._cur_row == sd.buffer.shape[0]:
+                return
             if empty_buffer:
                 xss = -1.
                 xse =  1.
                 xst =  1.
-                xnp =  3
+                xpn =  3
             elif self._xsc.type != ScaleType.INDEXES:
                 xss = self._xsc.start
-                xse = self._xsc.start + ((sd.buffer.shape[1] - 1) * self._xsc.step)
+                row_index = self._cur_row is self._cur_row
+                if self._img_shape is None:
+                    xse = self._xsc.start + ((sd.buffer.shape[1] - 1) * self._xsc.step)
+                else:
+                    xse = self._xsc.end
                 xst = self._xsc.step
                 xpn = sd.buffer.shape[1]
             else:
@@ -1810,7 +1814,6 @@ class ImageChannel(Channel):
                 xse = sd.buffer.shape[1]
                 xst = 1.
                 xpn = sd.buffer.shape[1]
-            ypn = 0
             if empty_buffer:
                 yss = -1.
                 yse =  1.
@@ -1818,7 +1821,10 @@ class ImageChannel(Channel):
                 ypn =  3
             elif self._ysc.type != ScaleType.INDEXES:
                 yss = self._ysc.start
-                yse = self._ysc.start + ((sd.buffer.shape[0] - 1) * self._ysc.step)
+                if self._img_shape is None:
+                    yse = self._ysc.start + ((sd.buffer.shape[0] - 1) * self._ysc.step)
+                else:
+                    yse = self._ysc.end
                 yst = self._ysc.step
                 ypn = sd.buffer.shape[0]
             else:
@@ -1839,7 +1845,23 @@ class ImageChannel(Channel):
             self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
             self._rrd.glyph.update(x=xss + w/2, y=yss + h/2, width=w, height=h)
             new_data = dict()
-            new_data['image'] = [sd.buffer] if not empty_buffer else [nan_buffer]
+            if self._img_shape is None:
+                new_data['image'] = [sd.buffer] if not empty_buffer else [nan_buffer]
+            else:
+                if empty_buffer:
+                    return #TODO: should we chnage this?
+                self.debug("ImageChannel: update: current row is {}".format(self._cur_row))
+                self.debug("ImageChannel: update: incoming data shape {}".format(sd.buffer.shape))
+                row_index = self._cur_row if self._cur_row > 0 else None
+                s1, s2 = slice(row_index, sd.buffer.shape[0], 1), slice(None)
+                #self.debug("ImageChannel: update: slices are {}:{}".format(s1,s2))
+                index = [0, s1, s2]
+                #self.debug("ImageChannel: index is {}".format(index))
+                new_rows = sd.buffer[s1, s2].flatten()
+                #self.debug("ImageChannel: new_rows are {}".format(new_rows))
+                self._cds.patch({'image': [(index, new_rows)]})
+                self._cur_row = sd.buffer.shape[0]
+                self.debug("ImageChannel: update: current row is now {}".format(self._cur_row))
             new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
             new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
             new_data['x_scale'] = [[xss, xse, xst, w]]
@@ -1914,7 +1936,7 @@ class GenericChannel(Channel):
                                               data_source=self.data_source,
                                               model_properties=self.model_properties)
             if self._delegate:
-                self._delegate.cell_context = self.cell_context
+                self._delegate.context = self.context
                 events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
                 self._delegate.register_event_handler(self, events)
                 self._delegate_model = self._delegate.setup_model()
@@ -1942,13 +1964,13 @@ class LayoutChannel(Channel):
         self._channels.register_add_callback(self.__on_add_channel)
         self.add(channels)
 
-    @NotebookCellContent.cell_context.setter
-    def cell_context(self, cell_context):
-        """overwrites NotebookCellContent.cell_context.setter"""
-        assert (isinstance(cell_context, NotebookCellContext))
-        self._cell_context = cell_context
+    @NotebookCellContent.context.setter
+    def context(self, new_context):
+        """overwrites NotebookCellContent.context.setter"""
+        assert (isinstance(new_context, CellContext))
+        self._context = new_context
         for channel in self._channels.values():
-            channel.cell_context = cell_context
+            channel.context = new_context
 
     def add(self, channels):
         """add the specified (sub)channels"""
@@ -1957,7 +1979,7 @@ class LayoutChannel(Channel):
     def __on_add_channel(self, channel):
         """called when a sub-channel is added to this channel"""
         if channel is not self:
-            channel.cell_context = self.cell_context
+            channel.context = self.context
             events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER,  DataStreamEvent.Type.MODEL_CHANGED]
             channel.register_event_handler(self, events)
 
@@ -1992,7 +2014,7 @@ class LayoutChannel(Channel):
             w = model.width
         else:
             #print("model_width:width=six.MAXSIZE={}".format(six.MAXSIZE))
-            h = six.MAXSIZE
+            w = six.MAXSIZE
         return w
 
     @classmethod
