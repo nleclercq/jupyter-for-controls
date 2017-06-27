@@ -401,7 +401,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler, Switchable):
                 self.info("DataStream channel: cleaning up DataSource {}".format(dsn))
                 dsi.cleanup()
             except Exception as e:
-                self.exception(e)
+                self.error(e)
 
     @property
     def model_properties(self):
@@ -455,9 +455,11 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
     @NotebookCellContent.context.setter
     def context(self, new_context):
         """overwrites NotebookCellContent.context.setter"""
+        print('DataStream.NotebookCellContent.context.setter called')
         assert (isinstance(new_context, CellContext))
         self._context = new_context
         for channel in self._channels.values():
+            print('DataStream.changing context of channel {}'.format(channel.name))
             channel.context = new_context
 
     def add(self, channels):
@@ -490,7 +492,6 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
                 models.append(model)
         return models
 
-    @tracer
     def update(self):
         """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
         #print("data stream: {} update".format(self.name))
@@ -498,7 +499,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
             try:
                 channel.update()
             except Exception as e:
-                self.exception(e)
+                self.error(e)
 
     def cleanup(self):
         """asks each Channel to cleanup itself (e.g. release resources)"""
@@ -507,7 +508,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
                 self.info("DataStream : cleaning up Channel {}".format(channel.name))
                 channel.cleanup()
             except Exception as e:
-                self.exception(e)
+                self.error(e)
 
 # ------------------------------------------------------------------------------
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
@@ -596,7 +597,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
             try:
                 self.__cleanup_data_streams()
             except Exception as e:
-                self.exception(e)
+                self.error(e)
             # remaining actions must be done under critical section (doc locked)
             self._doc.add_next_tick_callback(self.__stop_bokeh_server)
 
@@ -649,11 +650,11 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
         try:
             self.__uninstall_periodic_callbacks()
         except Exception as e:
-            self.exception(e)
+            self.error(e)
         try:
             self.__clear_models()
         except Exception as e:
-            self.exception(e)
+            self.error(e)
         if self._srv:
             self.debug("stopping Bokeh server...")
             try:
@@ -716,7 +717,6 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
                 ds.update()
             except Exception as e:
                 self.error(e)
-                print(e)
 
     def __on_model_changed(self, event):
         if event.emitter and event.data:
@@ -730,7 +730,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
                 self._doc.add_root(event.data, setter=self.__get_session())
                 # print("figure successfully added!")
             except Exception as e:
-                self.exception(e)
+                self.error(e)
 
     @tracer
     def __setup_models(self):
@@ -740,13 +740,13 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
             try:
                 models.extend(ds.setup_models())
             except Exception as e:
-                self.exception(e)
+                self.error(e)
         try:
             session = self.__get_session()
             for model in models:
                 self._doc.add_root(model, setter=session)
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
     @tracer
     def __clear_models(self):
@@ -754,11 +754,11 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
         try:
             self._doc.clear()
         except Exception as e:
-            self.exception(e)
+            self.error(e)
         try:
             reset_output()
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
     def __cleanup_data_streams(self):
         """the periodic callback"""
@@ -767,7 +767,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
                 self.info("DataStreamer : cleaning up DataStream {}".format(ds.name))
                 ds.cleanup()
             except Exception as e:
-                self.exception(e)
+                self.error(e)
 
 
 # ------------------------------------------------------------------------------
@@ -845,7 +845,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             print("__on_refresh_period_changed: {}".format(event))
             self.data_streamer.update_period = event['new']
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
     def __on_freeze_unfreeze_clicked(self, b=None):
         if self._running:
@@ -866,14 +866,14 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
             self._data_streamer.start()
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
     def close(self):
         try:
             self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
             self._data_streamer.close()
         except Exception as e:
-            self.exception(e)
+            self.error(e)
         self._controls.close()
         if self._error_area:
             self._error_area.close()
@@ -1096,7 +1096,6 @@ ScaleType = enum(
     'CHANNEL'
 )
 
-
 # ------------------------------------------------------------------------------
 class Scale(object):
     """a scale"""
@@ -1245,7 +1244,6 @@ class Scale(object):
                                                                                           self.step,
                                                                                           self.unit,
                                                                                           self.channel)
-
 
 # ------------------------------------------------------------------------------
 class ModelHelper(object):
@@ -1621,7 +1619,7 @@ class SpectrumChannel(Channel):
                     updated_data[cn] = np.zeros((min_len,), np.float)
             self._cds.data.update(updated_data)
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
     def cleanup(self):
         self.__reinitialize()
@@ -1634,6 +1632,7 @@ class ImageChannel(Channel):
 
     def __init__(self, name, data_source=None, model_properties=dict()):
         Channel.__init__(self, name, data_sources=[data_source], model_properties=model_properties)
+        self.print(model_properties)
         self.__reinitialize()
 
     def __reinitialize(self):
@@ -1719,7 +1718,6 @@ class ImageChannel(Channel):
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
-
             self._mdl = None
             props = self._merge_properties(self.model_properties, kwargs)
             self._cds = self.__instanciate_data_source()
@@ -1773,7 +1771,6 @@ class ImageChannel(Channel):
 
     def update(self):
         """gives each Channel a chance to update itself (e.g. to update the ColumnDataSources)"""
-        #print('image channel update')
         try:
             ds = self.data_source
             if ds is None:
@@ -1793,6 +1790,7 @@ class ImageChannel(Channel):
             if empty_buffer:
                 nan_buffer = np.empty((2,2))
                 nan_buffer.fill(np.nan)
+                self._cur_row = 0
             elif self._img_shape is not None and self._cur_row == sd.buffer.shape[0]:
                 return
             if empty_buffer:
@@ -1850,8 +1848,8 @@ class ImageChannel(Channel):
             else:
                 if empty_buffer:
                     return #TODO: should we chnage this?
-                self.debug("ImageChannel: update: current row is {}".format(self._cur_row))
-                self.debug("ImageChannel: update: incoming data shape {}".format(sd.buffer.shape))
+                #self.debug("ImageChannel: update: current row is {}".format(self._cur_row))
+                #self.debug("ImageChannel: update: incoming data shape {}".format(sd.buffer.shape))
                 row_index = self._cur_row if self._cur_row > 0 else None
                 s1, s2 = slice(row_index, sd.buffer.shape[0], 1), slice(None)
                 #self.debug("ImageChannel: update: slices are {}:{}".format(s1,s2))
@@ -1861,7 +1859,7 @@ class ImageChannel(Channel):
                 #self.debug("ImageChannel: new_rows are {}".format(new_rows))
                 self._cds.patch({'image': [(index, new_rows)]})
                 self._cur_row = sd.buffer.shape[0]
-                self.debug("ImageChannel: update: current row is now {}".format(self._cur_row))
+                #self.debug("ImageChannel: update: current row is now {}".format(self._cur_row))
             new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
             new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
             new_data['x_scale'] = [[xss, xse, xst, w]]
@@ -1871,7 +1869,7 @@ class ImageChannel(Channel):
             new_data['z_hover'] = [self._cds.data['z_hover'][0]]
             self._cds.data.update(new_data)
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
     def cleanup(self):
         self.__reinitialize()
@@ -1942,7 +1940,7 @@ class GenericChannel(Channel):
                 self._delegate_model = self._delegate.setup_model()
                 self.emit_model_changed(self._delegate_model)
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
     def cleanup(self):
         self._delegate = None
@@ -2125,5 +2123,5 @@ class LayoutChannel(Channel):
                 for c in self._channels.values():
                     c.update()
         except Exception as e:
-            self.exception(e)
+            self.error(e)
 
