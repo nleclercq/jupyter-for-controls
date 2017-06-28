@@ -455,11 +455,9 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
     @NotebookCellContent.context.setter
     def context(self, new_context):
         """overwrites NotebookCellContent.context.setter"""
-        print('DataStream.NotebookCellContent.context.setter called')
         assert (isinstance(new_context, CellContext))
         self._context = new_context
         for channel in self._channels.values():
-            print('DataStream.changing context of channel {}'.format(channel.name))
             channel.context = new_context
 
     def add(self, channels):

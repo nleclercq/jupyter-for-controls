@@ -100,7 +100,6 @@ class NotebookCellContent(object):
         self._context = CellContext()
         self._logger = logging.getLogger('fs.client.jupyter')
         try:
-            # no default handler workaround 
             h = self._logger.handlers[0]
         except IndexError:
             logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
