@@ -13,10 +13,6 @@ import numpy as np
 
 from IPython.display import HTML
 
-from bokeh.application import Application
-from bokeh.application.handlers import FunctionHandler
-from bokeh.embed import autoload_server
-from bokeh.io import output_notebook, reset_output
 from bokeh.layouts import row, column, layout, gridplot
 from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter
 from bokeh.models import widgets as bkhwidgets
@@ -36,6 +32,8 @@ from bokeh.server.server import Server
 from tornado.ioloop import IOLoop
 
 from tools import *
+from session import BokehSession
+
 
 # ------------------------------------------------------------------------------
 class Children(OrderedDict):
@@ -286,40 +284,9 @@ class ChannelData(object):
 
 
 # ------------------------------------------------------------------------------
-class Switchable(object):
-    
-    def __init__(self, enable=True, switch_callback=None):
-        self._enabled = enable
-        self._switch_callback = switch_callback if switch_callback else self.__default_switch_callback
+class DataSource(object):
 
-    def enable(self, force=False):
-        if not self._enabled or force:
-            self._enabled = self._switch_callback(True)
-
-    def disable(self, force=False):
-       if self._enabled or force:
-            self._enabled = self._switch_callback(False)
-
-    def switch(self, force=False):
-        switching_to_enable = not self._enabled
-        self._enabled = self.enable(force) if switching_to_enable else self.disable(force)
-
-    @property
-    def enabled(self):
-        return self._enabled
-
-    @property
-    def disabled(self):
-        return not self._enabled
-
-    def __default_switch_callback(self, switching_to_enable):
-        return switching_to_enable
-
-
-# ------------------------------------------------------------------------------
-class DataSource(Switchable):
-
-    def __init__(self, name, enable=True):
+    def __init__(self, name):
         self._name = name
 
     @property
@@ -334,13 +301,12 @@ class DataSource(Switchable):
 
 
 # ------------------------------------------------------------------------------
-class Channel(NotebookCellContent, DataStreamEventHandler, Switchable):
+class Channel(NotebookCellContent, DataStreamEventHandler):
     """single data stream channel"""
 
     def __init__(self, name, data_sources=None, model_properties=None):
         NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
-        Switchable.__init__(self, self.switch_callback)
         # data sources
         self._bad_source_cnt = 0
         self._data_sources = Children(self, DataSource)
@@ -351,9 +317,6 @@ class Channel(NotebookCellContent, DataStreamEventHandler, Switchable):
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
         pass
-
-    def switch_callback(self, switching_to_enable):
-        return switching_to_enable
 
     @property
     def data_source(self):
@@ -440,13 +403,12 @@ class Channel(NotebookCellContent, DataStreamEventHandler, Switchable):
 
 
 # ------------------------------------------------------------------------------
-class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
+class DataStream(NotebookCellContent, DataStreamEventHandler):
     """data stream interface"""
 
     def __init__(self, name, channels=None):
         NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
-        Switchable.__init__(self, self.switch_callback)
         # channels
         self._channels = Children(self, Channel)
         self._channels.register_add_callback(self._on_add_channel)
@@ -473,9 +435,6 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
         pass
-
-    def switch_callback(self, switching_to_enable):
-        return switching_to_enable
 
     def get_models(self):
         """returns the Bokeh model (figure, layout, ...)s associated with the DataStream"""
@@ -509,32 +468,25 @@ class DataStream(NotebookCellContent, DataStreamEventHandler, Switchable):
                 self.error(e)
 
 # ------------------------------------------------------------------------------
-class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
+class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     """a data stream manager embedded a bokeh server"""
 
-    def __init__(self, name, data_streams, update_period=1., ip_addr=None):
+    def __init__(self, name, data_streams, update_period=None, auto_start=False):
         # route output to current cell
         NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
-        Switchable.__init__(self, self.switch_callback)
-        # ip addr on which the server will be started
-        self._ip_addr = ip_addr
-        # embedded bokeh server
-        self._srv = None
-        # bokeh app & document
-        self._app = None
-        self._doc = None
-        # no cleanup pending
-        self._cleanup_pending = False
-        # no stop pending
-        self._stop_pending = False
-        # ipython html context in which the datastream is displayed
-        self._html_display = None
-        # callback period in sec
-        self._update_period = 1000. * update_period
+        BokehSession.__init__(self)
+        # a FIFO sot store incoming DataStreamEvent
+        self._events = deque()
+        # update period in seconds
+        self.callback_period = update_period
         # the data streams
         self._data_streams = list()
         self.add(data_streams)
+        # auto start
+        self._auto_start = auto_start
+        # open the session
+        self.open()
 
     @NotebookCellContent.context.setter
     def context(self, new_context):
@@ -545,193 +497,70 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
             ds.context = new_context
 
     def add(self, ds):
+        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
         if isinstance(ds, DataStream):
             ds.context = self.context
-            self.__register_event_handler(ds)
+            ds.register_event_handler(self, events)
             self._data_streams.append(ds)
         elif isinstance(ds, (list, tuple)):
             for s in ds:
                 if not isinstance(s, DataStream):
                     raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
                 s.context = self.context
-                self.__register_event_handler(s)
+                s.register_event_handler(self, events)
                 self._data_streams.append(s)
         else:
             raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
 
-    def __register_event_handler(self, ds):
-        assert(isinstance(ds, DataStream))
-        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
-        ds.register_event_handler(self, events)
-
-    def handle_stream_event(self, event):
-        assert (isinstance(event, DataStreamEvent))
-        if event.type == DataStreamEvent.Type.MODEL_CHANGED:
-            self.__on_model_changed(event)
-
-    def switch_callback(self, switching_to_enable):
-        return switching_to_enable
-
     @tracer
-    def start(self):
-        """starts attached data streams"""
-        self.__start_bokeh_server()
-
-    @tracer
-    def stop(self):
-        """stops attached data streams"""
-        self._stop_pending = True
-        self.__uninstall_periodic_callbacks()
+    def open(self):
+        """open the session and optionally start it """
+        super(DataStreamer, self).open()
 
     @tracer
     def close(self):
-        """stops attached data streams then clean"""
-        self.cleanup()
+        """close the session"""
+        # suspend periodic callback 
+        self.pause()
+        # the unerlying actions will be performed under critical section
+        self.safe_document_modifications(self.__close)
 
     @tracer
-    def cleanup(self):
-        if self._srv and not self._cleanup_pending:
-            self._cleanup_pending = True
-            try:
-                self.__cleanup_data_streams()
-            except Exception as e:
-                self.error(e)
-            # remaining actions must be done under critical section (doc locked)
-            self._doc.add_next_tick_callback(self.__stop_bokeh_server)
-
-    @property
-    def update_period(self):
-        """returns the update period (in seconds)"""
-        return self._update_period / 1000.
-
-    @update_period.setter
-    def update_period(self, update_period):
-        """set the update period (in seconds)"""
-        self._update_period = 1000. * update_period
-        self.__uninstall_periodic_callbacks()
-        self.__install_periodic_callbacks()
-
-    @tracer
-    def __start_bokeh_server(self):
-        """starts the underlying bokeh server (if not already running)"""
-        if self._srv:
-            self.__install_periodic_callbacks()
-            self._stop_pending = False
-            return
-        output_notebook(resources=INLINE, hide_banner=True) 
-        logging.getLogger('bokeh').setLevel(logging.CRITICAL)
-        logging.getLogger('tornado').setLevel(logging.CRITICAL)
-        logging.getLogger('fs.client.jupyter').setLevel(logging.ERROR)
-        self.debug("starting Bokeh server...")
-        self._srv = Server(
-            {'/':  Application(FunctionHandler(self.__entry_point))},
-            io_loop=IOLoop.instance(),
-            port=0,
-            host='*',
-            allow_websocket_origin=['*']
-        )
-        self._srv.start()
-        if not self._ip_addr:
-            self._ip_addr = socket.gethostbyname(socket.gethostname())
-        srv_url = 'http://{}:{}'.format(self._ip_addr, self._srv.port)
-        self.debug("autoload Bokeh server - url is {}".format(srv_url))
-        script = autoload_server(model=None, url=srv_url)
-        self._html_display = HTML(script)
-        display(self._html_display)
-        self.debug("Bokeh server successfully started")
-
-    @tracer
-    def __stop_bokeh_server(self):
-        """stops the underlying bokeh server"""
-        if not self._srv:
-            return
-        try:
-            self.__uninstall_periodic_callbacks()
-        except Exception as e:
-            self.error(e)
-        try:
-            self.__clear_models()
-        except Exception as e:
-            self.error(e)
-        if self._srv:
-            self.debug("stopping Bokeh server...")
-            try:
-                self.__get_session().destroy()
-                self._srv.stop()
-            except Exception as e:
-                self.error(e)
-            finally:
-                self._html_display = None
-                self._doc = None
-                self._srv_session = None
-                self._srv = None
-            self.debug("Bokeh server stopped & cleanup done")
-
-    def __entry_point(self, doc):
-        """the bokeh server entry point"""
-        try:
-            self._doc = doc
-            self.__setup_models()
-            self.__periodic_callback()
-            if not self._stop_pending:
-                self.__install_periodic_callbacks()
-                self._stop_pending = False
-        except Exception as e:
-            self.error(e)
-
-    def __get_session(self):
-        """returns the server's session"""
-        session = None
-        try:
-            session = self._srv.get_sessions('/')[0]
-        except:
-            pass
-        return session
-
-    @tracer
-    def __install_periodic_callbacks(self):
-        """installs the periodic callbacks - notably the one used to trigger stream updates"""
-        try:
-            self._doc.add_periodic_callback(self.__periodic_callback, self._update_period)
-        except Exception as e:
-            self.error(e)
-
-    @tracer
-    def __uninstall_periodic_callbacks(self):
-        """uninstalls the periodic callbacks"""
-        try:
-            if self._doc:
-                self._doc.remove_periodic_callback(self.__periodic_callback)
-        except ValueError:
-            # already removed
-            pass
-        except Exception as e:
-            self.error(e)
-
-    def __periodic_callback(self):
-        """the periodic callback"""
+    def __close(self):
+        """close/cleanup everything"""
+        # cleanup each data stream
         for ds in self._data_streams:
             try:
-                ds.update()
+                self.debug("DataStreamer: cleaning up DataStream {}".format(ds.name))
+                ds.cleanup()
             except Exception as e:
                 self.error(e)
-
-    def __on_model_changed(self, event):
-        if event.emitter and event.data:
-            if len(self._doc.roots):
-                for root in self._doc.roots:
-                    if root.name == str(event.emitter):
-                        # print("removing figure {}".format(root.name))
-                        self._doc.remove_root(root)
-            try:
-                # print("adding new root {} {}".format(event.data, event.data.name))
-                self._doc.add_root(event.data, setter=self.__get_session())
-                # print("figure successfully added!")
-            except Exception as e:
-                self.error(e)
+        self.debug("DataStreamer: closing Bokeh session...")
+        # delegate the remaining actions to our super class (this is mandatory)
+        try:
+            super(DataStreamer, self).close()
+        except Exception as e:
+            self.error(e)
+        self.debug("DataStreamer: Bokeh session closed")
 
     @tracer
-    def __setup_models(self):
+    def start(self):
+        """start periodic activity"""
+        if not self.ready:
+            self._auto_start = True
+        else:
+            self.resume()
+
+    @tracer
+    def stop(self):
+        """stop periodic activity"""
+        if not self.ready:
+            self._auto_start = False
+        else:
+            self.pause()
+
+    @tracer
+    def setup_document(self):
         """add the data stream models to the bokeh document"""
         models = list()
         for ds in self._data_streams:
@@ -740,33 +569,52 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, Switchable):
             except Exception as e:
                 self.error(e)
         try:
-            session = self.__get_session()
             for model in models:
-                self._doc.add_root(model, setter=session)
+                self.document.add_root(model, setter=self.id)
         except Exception as e:
             self.error(e)
+        if self._auto_start:
+            self.start()
 
-    @tracer
-    def __clear_models(self):
-        """removes the data stream models from the bokeh document"""
-        try:
-            self._doc.clear()
-        except Exception as e:
-            self.error(e)
-        try:
-            reset_output()
-        except Exception as e:
-            self.error(e)
+    def handle_stream_event(self, event):
+        assert (isinstance(event, DataStreamEvent))
+        if event.type == DataStreamEvent.Type.MODEL_CHANGED:
+            self._events.appendleft(event) 
+            self.safe_document_modifications(self.__on_model_changed)
 
-    def __cleanup_data_streams(self):
-        """the periodic callback"""
-        for ds in self._data_streams:
+    def __on_model_changed(self):
+        event = self._events.pop() 
+        if event.emitter and event.data:
+            self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
+            if len(self.document.roots):
+                for root in self.document.roots:
+                    if root.name == str(event.emitter):
+                        self.debug("removing figure {}".format(root.name))
+                        self.document.remove_root(root)
             try:
-                self.info("DataStreamer : cleaning up DataStream {}".format(ds.name))
-                ds.cleanup()
+                self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
+                self.document.add_root(event.data, setter=self.id)
             except Exception as e:
                 self.error(e)
+            self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
 
+    @property
+    def update_period(self):
+        """returns the update period (in seconds)"""
+        return self.callback_period
+
+    @update_period.setter
+    def update_period(self, update_period):
+        """set the update period (in seconds)"""
+        self.update_callback_period(update_period)
+
+    def periodic_callback(self):
+        """the session periodic callback"""
+        for ds in self._data_streams:
+            try:
+                ds.update()
+            except Exception as e:
+                self.error(e)
 
 # ------------------------------------------------------------------------------
 class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
@@ -788,11 +636,9 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self.__auto_start(kwargs.get('auto_start', True))
 
     def __auto_start(self, auto_start):
+        self._running = False
         if auto_start:
-            self._running = False
             self.__on_freeze_unfreeze_clicked()
-        else:
-            self._running = False
 
     @staticmethod
     def l01a(width='auto', *args, **kwargs):
@@ -1630,7 +1476,6 @@ class ImageChannel(Channel):
 
     def __init__(self, name, data_source=None, model_properties=dict()):
         Channel.__init__(self, name, data_sources=[data_source], model_properties=model_properties)
-        self.print(model_properties)
         self.__reinitialize()
 
     def __reinitialize(self):

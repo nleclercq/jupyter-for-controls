@@ -13,30 +13,29 @@ from bokeh.server.server import Server
 from bokeh.application import Application
 from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import autoload_server
-from bokeh.io import reset_output
 
 
 class BokehSessionHandler(Handler):
 
     def on_server_loaded(self, server_context):
-        print("SessionHandler: on_server_loaded <<")
+        #print("SessionHandler: on_server_loaded <<")
         pass
-        print("SessionHandler: on_server_loaded >>")
+        #print("SessionHandler: on_server_loaded >>")
 
     def on_server_unloaded(self, server_context):
-        print("SessionHandler: on_server_unloaded <<")
+        #print("SessionHandler: on_server_unloaded <<")
         pass
-        print("SessionHandler: on_server_unloaded >>")
+        #print("SessionHandler: on_server_unloaded >>")
 
     def on_session_created(self, session_context):
-        print("SessionHandler: on_session_created <<")
+        #print("SessionHandler: on_session_created <<")
         pass
-        print("SessionHandler: on_session_created >>")
+        #print("SessionHandler: on_session_created >>")
 
     def on_session_destroyed(self, session_context):
-        print("SessionHandler: on_server_unloaded <<")
+        #print("SessionHandler: on_server_unloaded <<")
         pass
-        print("SessionHandler: on_server_unloaded >>")
+        #print("SessionHandler: on_server_unloaded >>")
 
 
 class BokehSession(object):
@@ -53,7 +52,7 @@ class BokehSession(object):
 
     def on_session_destroyed():
         pass
-        
+
     @property
     def ready(self):
         return self._doc is not None
@@ -78,12 +77,14 @@ class BokehSession(object):
 
     def open(self):
         """open the session"""
-        print("BokehSession.open <<")
+        #print("BokehSession.open <<")
         BokehServer.open_session(self)
-        print("BokehSession.open >>")
+        #print("BokehSession.open >>")
 
     def close(self):
         """close the session"""
+        if self._doc:
+            self._doc.clear()
         BokehServer.close_session(self)
         
     def setup_document(self):
@@ -141,10 +142,10 @@ class BokehServer(object):
     def __entry_point(doc):
         try:
             #TODO: should we lock BokehServer.__sessions__? 
-            print('BokehServer.__entry_point <<')
+            #print('BokehServer.__entry_point <<')
             session = BokehServer.__sessions__.pop() 
             session.on_session_created(doc)
-            print('BokehServer.__entry_point >>')
+            #print('BokehServer.__entry_point >>')
         except Exception as e:
             print(e)
         
@@ -161,19 +162,19 @@ class BokehServer(object):
         
     @staticmethod
     def open_session(new_session):
-        print("BokehServer.open_session <<")
+        #print("BokehServer.open_session <<")
         assert(isinstance(new_session, BokehSession))
         if not BokehServer.__bkh_srv__:
-            print("BokehServer.open_session.starting server")
+            #print("BokehServer.open_session.starting server")
             BokehServer.__start_server()
-            print("BokehServer.open_session.server started")
+            #print("BokehServer.open_session.server started")
         #TODO: should we lock BokehServer.__sessions__? 
         BokehServer.__sessions__.appendleft(new_session) 
-        print("BokehServer.open_session.autoload server from {}".format(BokehServer.__srv_url__))
+        #print("BokehServer.open_session.autoload server from {}".format(BokehServer.__srv_url__))
         script = autoload_server(model=None, url=BokehServer.__srv_url__)
         html_display = HTML(script)
         display(html_display)
-        print("BokehServer.open_session >>")
+        #print("BokehServer.open_session >>")
         
     @staticmethod
     def close_session(session):
@@ -191,15 +192,15 @@ class BokehServer(object):
     @staticmethod
     def print_info(called_from_session_handler=False):
         if not BokehServer.__bkh_srv__:
-            print("no Bokeh server running") 
+            #print("no Bokeh server running") 
             return
         try:
-            print("Bokeh server URL: {}".format(BokehServer.__srv_url__))
+            #print("Bokeh server URL: {}".format(BokehServer.__srv_url__))
             sessions = BokehServer.__bkh_srv__.get_sessions()
             num_sessions = len(sessions)
             if called_from_session_handler:
                 num_sessions += 1
-            print("Number of opened sessions: {}".format(num_sessions))
+            #print("Number of opened sessions: {}".format(num_sessions))
         except Exception as e:
             print(e)
 
