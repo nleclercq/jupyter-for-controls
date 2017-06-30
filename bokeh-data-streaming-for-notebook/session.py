@@ -41,10 +41,12 @@ class BokehSessionHandler(Handler):
 class BokehSession(object):
     
     def __init__(self):
-        """the associated bokeh document (for experts only)"""
+        # the associated bokeh document (for experts only)
         self._doc = None
-        """periodic callback period in seconds - defaults to None (i.e. disabled)"""
+        # periodic callback period in seconds - defaults to None (i.e. disabled)
         self._callback_period = None
+        # periodic activity enabled?
+        self._suspended = True
 
     def on_session_created(self, doc):
         self._doc = doc
@@ -64,6 +66,10 @@ class BokehSession(object):
     @property
     def id(self):
         return self._doc.session_context.id if self._doc else None
+
+    @property
+    def suspended(self):
+        return self._suspended
 
     @property 
     def callback_period(self):
@@ -98,10 +104,12 @@ class BokehSession(object):
     def pause(self):
         """suspend the (periodic) callback"""
         BokehServer.update_callback_period(self, None)
+        self._suspended = True
     
     def resume(self):
         """resume the (periodic) callback"""
         BokehServer.update_callback_period(self, self.callback_period)
+        self._suspended = False
 
     def update_callback_period(self, ucbp):
         """update the (periodic) callback"""
