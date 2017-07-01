@@ -19,24 +19,17 @@ from bokeh.embed import autoload_server
 # ------------------------------------------------------------------------------
 class BokehSessionHandler(Handler):
 
-    def __init__(self):
-        self._logger = logging.getLogger('fs.client.jupyter')
-
     def on_server_loaded(self, server_context):
-        self._logger.debug("SessionHandler: on_server_loaded <<")
-        self._logger.debug("SessionHandler: on_server_loaded >>")
+        pass
 
     def on_server_unloaded(self, server_context):
-        self._logger.debug("SessionHandler: on_server_unloaded <<")
-        self._logger.debug("SessionHandler: on_server_unloaded >>")
+        pass
 
     def on_session_created(self, session_context):
-        self._logger.debug("SessionHandler: on_session_created <<")
-        self._logger.debug("SessionHandler: on_session_created >>")
+        pass
 
     def on_session_destroyed(self, session_context):
-        self._logger.debug("SessionHandler: on_server_unloaded <<")
-        self._logger.debug("SessionHandler: on_server_unloaded >>")
+        pass
 
 
 # ------------------------------------------------------------------------------
