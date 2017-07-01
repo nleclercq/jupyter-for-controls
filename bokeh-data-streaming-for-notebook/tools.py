@@ -7,6 +7,7 @@ from uuid import uuid4
 from IPython import get_ipython
 from IPython.display import display, clear_output
 
+
 # ------------------------------------------------------------------------------
 def is_iterable(some_object):
     try:
@@ -15,11 +16,13 @@ def is_iterable(some_object):
     except:
         return False
 
+
 # ------------------------------------------------------------------------------
 def enum(*sequential):
     enums = dict(zip(sequential, range(len(sequential))))
     enums['len'] = len(sequential)
     return type('Enum', (), enums)
+
 
 # ------------------------------------------------------------------------------
 def tracer(fn):
@@ -58,11 +61,6 @@ class CellContext(object):
         k = get_ipython().kernel
         self._ident = k._parent_ident
         self._header = k._parent_header
-        self._save_publish_status = k._publish_status
-        k._publish_status = self.__disable_once
-       
-    def __disable_once(self, *args, **kw):
-        get_ipython().kernel._publish_status = self._save_publish_status
         
     def __call__(self):
         return (self._ident, self._header)

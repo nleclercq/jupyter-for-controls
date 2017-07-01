@@ -13,9 +13,9 @@ import numpy as np
 
 from IPython.display import HTML
 
-from bokeh.layouts import row, column, layout, gridplot
+from bokeh.layouts import row, column, layout, gridplot, widgetbox
 from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter
-from bokeh.models import widgets as bkhwidgets
+from bokeh.models import widgets as BokehWidgets
 from bokeh.models.glyphs import Rect
 from bokeh.models.mappers import LinearColorMapper
 from bokeh.models.ranges import Range1d
@@ -143,7 +143,7 @@ class DataStreamEventHandler(object):
                     #print("{}: emitting event {} towards {}".format(self.name, event.type, event_handler.name))
                     event_handler.__handle_stream_event(event)
                 except Exception as e:
-                    print(e) #TODO
+                    print(e)
                     raise
 
     def __handle_stream_event(self, event):
@@ -467,6 +467,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
             except Exception as e:
                 self.error(e)
 
+
 # ------------------------------------------------------------------------------
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     """a data stream manager embedded a bokeh server"""
@@ -616,11 +617,12 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
             except Exception as e:
                 self.error(e)
 
+
 # ------------------------------------------------------------------------------
 class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
     """a DataStreamer controller"""
 
-    def __init__(self, name, data_streamer, **kwargs):
+    def __init__(self, name, data_streamer=None, **kwargs):
         # check input parameters
         assert (isinstance(data_streamer, DataStreamer))
         # route output to current cell
@@ -686,7 +688,6 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
 
     def __on_refresh_period_changed(self, event):
         try:
-            print("__on_refresh_period_changed: {}".format(event))
             self.data_streamer.update_period = event['new']
         except Exception as e:
             self.error(e)
@@ -1925,8 +1926,8 @@ class LayoutChannel(Channel):
         """spread the children in tabs"""
         tl = list()
         for cn, ci in six.iteritems(children):
-            tl.append(bkhwidgets.Panel(child=ci, title=cn))
-        self._tabs_widget = bkhwidgets.Tabs(tabs=tl)
+            tl.append(BokehWidgets.Panel(child=ci, title=cn))
+        self._tabs_widget = BokehWidgets.Tabs(tabs=tl)
         self._tabs_widget.on_change("active", self.on_tabs_selection_change)
         return column(name=str(self.uid), children=[self._tabs_widget], responsive=True)
 
