@@ -173,7 +173,7 @@ class BokehServer(object):
             BokehServer.__logger__.debug("BokehServer.open_session.server started")
         #TODO: should we lock BokehServer.__sessions__? 
         BokehServer.__sessions__.appendleft(new_session) 
-        BokehServer.__logger__.debug("BokehServer.open_session.autoload server from {}".format(BokehServer.__srv_url__))
+        BokehServer.__logger__.debug("BokehServer.open_session.autoload server - url is {}".format(BokehServer.__srv_url__))
         script = autoload_server(model=None, url=BokehServer.__srv_url__)
         html_display = HTML(script)
         display(html_display)
