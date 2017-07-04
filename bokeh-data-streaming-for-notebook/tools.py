@@ -42,6 +42,8 @@ def tracer(fn):
     def wrapper(self, *args, **kwargs):
         t0 = time.time()
         name = self.name if hasattr(self, 'name') else ''
+        if len(name) > 5:
+            name = name[-5:]
         qualified_name = "{}.{}.{}".format(self.__class__.__name__, fn.__name__, name)
         debug_trace(self, "{} <<in".format(qualified_name))
         try:
@@ -97,10 +99,12 @@ class NotebookCellContent(object):
         self._uid = uuid4().int
         self._context = CellContext()
         self._logger = logging.getLogger('fs.client.jupyter')
+        '''
         try:
             h = self._logger.handlers[0]
         except IndexError:
-            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
+            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.DEBUG)
+        '''
 
     @property
     def name(self):

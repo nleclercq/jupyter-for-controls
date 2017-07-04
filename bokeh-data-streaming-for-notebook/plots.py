@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-import logging
-import socket
 import datetime
 from collections import OrderedDict, deque
 from math import ceil, pi
@@ -11,9 +9,9 @@ import ipywidgets as widgets
 
 import numpy as np
 
-from IPython.display import HTML
-
-from bokeh.layouts import row, column, layout, gridplot, widgetbox
+from bokeh.io import output_notebook
+from bokeh.resources import INLINE
+from bokeh.layouts import row, column, layout, gridplot
 from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter
 from bokeh.models import widgets as BokehWidgets
 from bokeh.models.glyphs import Rect
@@ -22,14 +20,10 @@ from bokeh.models.ranges import Range1d
 from bokeh.models.tools import BoxSelectTool, HoverTool, CrosshairTool
 from bokeh.models.tools import ResetTool, PanTool, BoxZoomTool, ResizeTool
 from bokeh.models.tools import WheelZoomTool, SaveTool
-from bokeh.models.widgets import Slider, Button
+from bokeh.models.widgets.markups import Div
 from bokeh.palettes import Plasma256
 from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
-from bokeh.resources import INLINE
-from bokeh.server.server import Server
-
-from tornado.ioloop import IOLoop
 
 from tools import *
 from session import BokehSession
@@ -312,11 +306,19 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
         self._data_sources = Children(self, DataSource)
         self.add_data_sources(data_sources)
         # model properties
-        self._model_props = model_properties
+        self._model_props = dict() if model_properties is None else model_properties
 
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
         pass
+
+    @property
+    def title(self):
+        return self._model_props.get('channel_title', None)
+
+    @property
+    def show_title(self):
+        return self._model_props.get('show_channel_title', False)
 
     @property
     def data_source(self):
@@ -445,6 +447,9 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         models = list()
         for channel in self._channels.values():
             model = channel.setup_model()
+            if channel.show_title and channel.title is not None:
+                div_txt = "<b>{}</b>".format(channel.title)
+                models.append(Div(text=div_txt))
             if model:
                 models.append(model)
         return models
@@ -472,11 +477,17 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     """a data stream manager embedded a bokeh server"""
 
+    # output_notebook_called = False
+
     def __init__(self, name, data_streams, update_period=None, auto_start=False):
         # route output to current cell
         NotebookCellContent.__init__(self, name)
         DataStreamEventHandler.__init__(self, name)
         BokehSession.__init__(self)
+        # configure the default output state to generate output in Jupyter notebook cells
+        #if not DataStreamer.output_notebook_called:
+        #   output_notebook(resources=INLINE, hide_banner=True)
+        #   DataStreamer.output_notebook_called = True
         # a FIFO sot store incoming DataStreamEvent
         self._events = deque()
         # update period in seconds
@@ -548,8 +559,10 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     def start(self):
         """start periodic activity"""
         if not self.ready:
+            self.debug("DataStreamer.start:session not ready:set auto_start to True")
             self._auto_start = True
         else:
+            self.debug("DataStreamer.start:session ready:resuming")
             self.resume()
 
     @tracer
@@ -563,19 +576,27 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     @tracer
     def setup_document(self):
         """add the data stream models to the bokeh document"""
-        models = list()
-        for ds in self._data_streams:
+        try:
+            models = list()
+            for ds in self._data_streams:
+                try:
+                    models.extend(ds.setup_models())
+                except Exception as e:
+                    self.error(e)
             try:
-                models.extend(ds.setup_models())
+                self.periodic_callback()
+            except:
+                pass
+            try:
+                for model in models:
+                    self.document.add_root(model, setter=self.id)
             except Exception as e:
                 self.error(e)
-        try:
-            for model in models:
-                self.document.add_root(model, setter=self.id)
+            if self._auto_start:
+                self.start()
         except Exception as e:
             self.error(e)
-        if self._auto_start:
-            self.start()
+            raise
 
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
@@ -805,13 +826,14 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
 
 
 # ------------------------------------------------------------------------------
-class BoxSelectionManager(object):
+class BoxSelectionManager(NotebookCellContent):
     """BoxSelectTool manager"""
 
     repository = dict()
 
     def __init__(self, selection_callback=None, reset_callback=None):
         self._uid = uuid4().int
+        NotebookCellContent.__init__(self, str(self._uid))
         BoxSelectionManager.repository[self._uid] = self
         self._selection_callback = selection_callback
         self._reset_callback = reset_callback
@@ -1475,7 +1497,7 @@ class SpectrumChannel(Channel):
 class ImageChannel(Channel):
     """image data source channel"""
 
-    def __init__(self, name, data_source=None, model_properties=dict()):
+    def __init__(self, name, data_source=None, model_properties=None):
         Channel.__init__(self, name, data_sources=[data_source], model_properties=model_properties)
         self.__reinitialize()
 
@@ -1606,9 +1628,9 @@ class ImageChannel(Channel):
             f.ygrid.grid_line_color = None
             self.__setup_toolbar(f)
             self._mdl = f
-            bstm = props.get('selection_manager', None)
-            if bstm:
-                bstm.register_figure(f)
+            bsm = props.get('selection_manager', None)
+            if bsm:
+                bsm.register_figure(f)
         except Exception as e:
             self.error(e)
         return self._mdl
@@ -1957,7 +1979,7 @@ class LayoutChannel(Channel):
         # TODO: mutex required?
         at = self._tabs_widget.active
         cn = self._tabs_widget.tabs[at].title
-        self._iterichannels[cn].update()
+        self._channels[cn].update()
 
     def update(self):
         try:

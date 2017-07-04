@@ -2,10 +2,8 @@ from __future__ import print_function
 
 import socket
 import logging
-
+from threading import Lock, Condition
 from collections import deque
-
-import numpy as np
 
 from IPython.display import HTML, clear_output, display
 
@@ -43,11 +41,11 @@ class BokehSession(object):
         # periodic activity enabled?
         self._suspended = True
 
-    def on_session_created(self, doc):
+    def _on_session_created(self, doc):
         self._doc = doc
         self.setup_document()
 
-    def on_session_destroyed():
+    def _on_session_destroyed(self):
         pass
 
     @property
@@ -121,12 +119,15 @@ class BokehServer(object):
     __bkh_app__ = None
     __bkh_srv__ = None
     __srv_url__ = None
+
     __sessions__ = deque()
-    __logger__ = logging.getLogger('fs.client.jupyter')
+
+    __logger__ = logging.getLogger('fs.client.jupyter.session')
+    __logger__.setLevel(logging.ERROR)
         
     @staticmethod
     def __start_server():
-        app = Application(FunctionHandler(BokehServer.__entry_point))
+        app = Application(FunctionHandler(BokehServer.__session_entry_point))
         app.add(BokehSessionHandler())
         srv = Server(
             {'/': app},
@@ -142,16 +143,16 @@ class BokehServer(object):
         BokehServer.__srv_url__ = 'http://{}:{}'.format(srv_addr, srv.port)
         
     @staticmethod
-    def __entry_point(doc):
+    def __session_entry_point(doc):
         try:
-            #TODO: should we lock BokehServer.__sessions__? 
-            BokehServer.__logger__.debug('BokehServer.__entry_point <<')
-            session = BokehServer.__sessions__.pop() 
-            session.on_session_created(doc)
-            BokehServer.__logger__.debug('BokehServer.__entry_point >>')
+            #TODO: should we lock BokehServer.__sessions__?
+            BokehServer.__logger__.debug('BokehServer.__session_entry_point [doc:{}] <<'.format(id(doc)))
+            session = BokehServer.__sessions__.pop()
+            session._on_session_created(doc)
+            BokehServer.__logger__.debug('BokehServer.__session_entry_point [doc:{}] >>'.format(id(doc)))
         except Exception as e:
             print(e)
-        
+
     @staticmethod
     def __add_periodic_callback(session, ucbp):
         assert(isinstance(session, BokehSession))
@@ -171,8 +172,8 @@ class BokehServer(object):
             BokehServer.__logger__.debug("BokehServer.open_session.starting server")
             BokehServer.__start_server()
             BokehServer.__logger__.debug("BokehServer.open_session.server started")
-        #TODO: should we lock BokehServer.__sessions__? 
-        BokehServer.__sessions__.appendleft(new_session) 
+        #TODO: should we lock BokehServer.__sessions__?
+        BokehServer.__sessions__.appendleft(new_session)
         BokehServer.__logger__.debug("BokehServer.open_session.autoload server - url is {}".format(BokehServer.__srv_url__))
         script = autoload_server(model=None, url=BokehServer.__srv_url__)
         html_display = HTML(script)
@@ -184,8 +185,9 @@ class BokehServer(object):
         """totally experimental attempt to destroy a session from python!"""
         assert(isinstance(session, BokehSession))
         session_id = session._doc.session_context.id
-        session = BokehServer.__bkh_srv__.get_session('/', session_id)
-        session.destroy()
+        bkh_session = BokehServer.__bkh_srv__.get_session('/', session_id)
+        bkh_session.destroy()
+        session._on_session_destroyed()
         
     @staticmethod
     def update_callback_period(session, ucbp):
