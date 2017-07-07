@@ -94,11 +94,13 @@ def cell_context(context):
 # ------------------------------------------------------------------------------
 class NotebookCellContent(object):
 
-    def __init__(self, name):
+    default_logger = "fs.client.jupyter"
+
+    def __init__(self, name, logger_name=None):
         self._name = name
         self._uid = uuid4().int
         self._context = CellContext()
-        self._logger = logging.getLogger('fs.client.jupyter')
+        self._logger = logging.getLogger(NotebookCellContent.default_logger if logger_name is None else logger_name)
         '''
         try:
             h = self._logger.handlers[0]

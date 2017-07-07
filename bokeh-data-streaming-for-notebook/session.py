@@ -8,11 +8,15 @@ from collections import deque
 from IPython.display import HTML, clear_output, display
 
 from tornado.ioloop import IOLoop
+
+from bokeh.io import output_notebook
+from bokeh.resources import INLINE
 from bokeh.server.server import Server
 from bokeh.application import Application
 from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import autoload_server
 
+module_logger_name = "fs.client.jupyter.session"
 
 # ------------------------------------------------------------------------------
 class BokehSessionHandler(Handler):
@@ -116,17 +120,17 @@ class BokehSession(object):
 # ------------------------------------------------------------------------------
 class BokehServer(object):
 
-    __bkh_app__ = None
     __bkh_srv__ = None
     __srv_url__ = None
 
     __sessions__ = deque()
 
-    __logger__ = logging.getLogger('fs.client.jupyter.session')
+    __logger__ = logging.getLogger(module_logger_name)
     __logger__.setLevel(logging.ERROR)
-        
+
     @staticmethod
     def __start_server():
+        output_notebook(resources=INLINE, hide_banner=True)
         app = Application(FunctionHandler(BokehServer.__session_entry_point))
         app.add(BokehSessionHandler())
         srv = Server(
@@ -139,7 +143,6 @@ class BokehServer(object):
         srv.start()
         srv_addr = srv.address if srv.address else socket.gethostbyname(socket.gethostname())
         BokehServer.__bkh_srv__ = srv
-        BokehServer.__bkh_app__ = app
         BokehServer.__srv_url__ = 'http://{}:{}'.format(srv_addr, srv.port)
         
     @staticmethod

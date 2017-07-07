@@ -3,16 +3,15 @@ from __future__ import print_function
 import datetime
 from collections import OrderedDict, deque
 from math import ceil, pi
+from random import randint
 import six
 
 import ipywidgets as widgets
 
 import numpy as np
 
-from bokeh.io import output_notebook
-from bokeh.resources import INLINE
 from bokeh.layouts import row, column, layout, gridplot
-from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter
+from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter, Label
 from bokeh.models import widgets as BokehWidgets
 from bokeh.models.glyphs import Rect
 from bokeh.models.mappers import LinearColorMapper
@@ -28,6 +27,7 @@ from bokeh.plotting.figure import Figure
 from tools import *
 from session import BokehSession
 
+module_logger_name = "fs.client.jupyter.plots"
 
 # ------------------------------------------------------------------------------
 class Children(OrderedDict):
@@ -299,7 +299,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
     """single data stream channel"""
 
     def __init__(self, name, data_sources=None, model_properties=None):
-        NotebookCellContent.__init__(self, name)
+        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
         DataStreamEventHandler.__init__(self, name)
         # data sources
         self._bad_source_cnt = 0
@@ -307,6 +307,8 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
         self.add_data_sources(data_sources)
         # model properties
         self._model_props = dict() if model_properties is None else model_properties
+        # tmp label
+        self._msg_label = None
 
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
@@ -395,6 +397,35 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         return None
 
+    def _show_msg_label(self, bkh_figure, x=70, y=70, text='Waiting for data'):
+        self._msg_text = text
+        self._msg_cnt = 0
+        self._msg_label = Label(
+                                x=70,
+                                y=70,
+                                x_units='screen',
+                                y_units='screen',
+                                text=self._msg_text,
+                                background_fill_alpha=0.0,
+                                text_font='helvetica',
+                                text_font_style='italic',
+                                text_font_size='11pt',
+                                text_color='black'
+                                )
+        bkh_figure.add_layout(self._msg_label)
+
+    def _animate_msg_label(self):
+        try:
+            if self._msg_label:
+                self._msg_label.text = self._msg_text + "." * self._msg_cnt
+                self._msg_cnt = (self._msg_cnt + 1) % 4
+        except Exception as e:
+            pass
+
+    def _hide_msg_label(self):
+        if self._msg_label:
+            self._msg_label.visible = False
+
     def get_model(self):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return None
@@ -409,7 +440,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
     """data stream interface"""
 
     def __init__(self, name, channels=None):
-        NotebookCellContent.__init__(self, name)
+        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
         DataStreamEventHandler.__init__(self, name)
         # channels
         self._channels = Children(self, Channel)
@@ -481,7 +512,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
 
     def __init__(self, name, data_streams, update_period=None, auto_start=False):
         # route output to current cell
-        NotebookCellContent.__init__(self, name)
+        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
         DataStreamEventHandler.__init__(self, name)
         BokehSession.__init__(self)
         # configure the default output state to generate output in Jupyter notebook cells
@@ -647,7 +678,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # check input parameters
         assert (isinstance(data_streamer, DataStreamer))
         # route output to current cell
-        NotebookCellContent.__init__(self, name)
+        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
         DataStreamEventHandler.__init__(self, name)
         # data streamer
         self.data_streamer = data_streamer
@@ -833,7 +864,7 @@ class BoxSelectionManager(NotebookCellContent):
 
     def __init__(self, selection_callback=None, reset_callback=None):
         self._uid = uuid4().int
-        NotebookCellContent.__init__(self, str(self._uid))
+        NotebookCellContent.__init__(self, str(self._uid), logger_name=module_logger_name)
         BoxSelectionManager.repository[self._uid] = self
         self._selection_callback = selection_callback
         self._reset_callback = reset_callback
@@ -876,19 +907,19 @@ class BoxSelectionManager(NotebookCellContent):
         kwargs['line_width'] = 2
         return Rect(**kwargs)
 
-    def register_figure(self, fig):
+    def register_figure(self, bkh_figure):
         try:
-            bst = fig.select(BoxSelectTool)[0]
+            bst = bkh_figure.select(BoxSelectTool)[0]
             bst.callback = self.__box_selection_callback()
         except:
             return
         #try:
-        #    rst = fig.select(ResetTool)[0]
+        #    rst = bkh_figure.select(ResetTool)[0]
         #    rst.js_on_change('do', self.__reset_callback())
         #except:
         #    return
         rect = self.__selection_glyph()
-        fig.add_glyph(self._selection_cds, glyph=rect, selection_glyph=rect, nonselection_glyph=rect)
+        bkh_figure.add_glyph(self._selection_cds, glyph=rect, selection_glyph=rect, nonselection_glyph=rect)
 
     def __box_selection_callback(self):
         return CustomJS(args=dict(cds=self._selection_cds), code="""
@@ -1183,7 +1214,7 @@ class ScalarChannel(Channel):
         ]
         figure.add_tools(PanTool())
         figure.add_tools(BoxZoomTool())
-        #figure.add_tools(WheelZoomTool())
+        figure.add_tools(WheelZoomTool())
         figure.add_tools(ResizeTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
@@ -1230,6 +1261,7 @@ class ScalarChannel(Channel):
         figure.circle(**kwargs)
         self._ngl += 1
 
+    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1250,6 +1282,8 @@ class ScalarChannel(Channel):
             # setup the legend
             if show_legend:
                 self.__setup_legend(f)
+            # show tmp label
+            self._show_msg_label(f)
             # setup the toolbar
             self.__setup_toolbar(f)
             # store figure
@@ -1274,10 +1308,12 @@ class ScalarChannel(Channel):
                 if sd.has_failed or sd.buffer is None:
                     min_len = 0
                     self._bad_source_cnt += 1
+                    self._animate_msg_label()
                     #print("emitting error...")
                     self.emit_error(sd)
                 else:
                     min_len = min(min_len, sd.buffer.shape[0])
+                    self._hide_msg_label()
             if not self._bad_source_cnt and previous_bad_source_cnt:
                 #print("emitting recover...")
                 self.emit_recover()
@@ -1346,27 +1382,27 @@ class SpectrumChannel(Channel):
             x_channel_name += 'x'
         return x_channel_name
 
-    def __setup_legend(self, figure):
-        figure.legend.location = 'top_left'
-        figure.legend.click_policy = 'hide'
+    def __setup_legend(self, bkh_figure):
+        bkh_figure.legend.location = 'top_left'
+        bkh_figure.legend.click_policy = 'hide'
 
-    def __setup_toolbar(self, figure):
+    def __setup_toolbar(self, bkh_figure):
         htt = [
             ("index", "$index"),
             ("(x,y)", "($x, $y)")
         ]
-        figure.add_tools(PanTool())
-        figure.add_tools(BoxZoomTool())
-        #figure.add_tools(WheelZoomTool())
-        figure.add_tools(ResizeTool())
-        figure.add_tools(ResetTool())
-        figure.add_tools(SaveTool())
-        figure.add_tools(HoverTool(tooltips=htt))
-        figure.add_tools(CrosshairTool())
-        figure.toolbar.logo = None
-        figure.toolbar.active_drag = None
-        figure.toolbar.active_scroll = None
-        figure.toolbar.active_tap = None
+        bkh_figure.add_tools(PanTool())
+        bkh_figure.add_tools(BoxZoomTool())
+        bkh_figure.add_tools(WheelZoomTool())
+        bkh_figure.add_tools(ResizeTool())
+        bkh_figure.add_tools(ResetTool())
+        bkh_figure.add_tools(SaveTool())
+        bkh_figure.add_tools(HoverTool(tooltips=htt))
+        bkh_figure.add_tools(CrosshairTool())
+        bkh_figure.toolbar.logo = None
+        bkh_figure.toolbar.active_drag = None
+        bkh_figure.toolbar.active_scroll = None
+        bkh_figure.toolbar.active_tap = None
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
@@ -1389,16 +1425,17 @@ class SpectrumChannel(Channel):
             f.title.text = self.name if layout != 'tabs' else " "
         return f
 
-    def __setup_glyph(self, figure, data_source, show_legend=True):
+    def __setup_glyph(self, bkh_figure, y_column, show_legend=True):
         kwargs = dict()
         kwargs['x'] = self._xsn
-        kwargs['y'] = data_source
+        kwargs['y'] = y_column
         kwargs['source'] = self._cds
         kwargs['line_color'] = ModelHelper.line_color(self._ngl)
-        kwargs['legend'] = None if not show_legend else data_source + ' '
-        figure.line(**kwargs)
+        kwargs['legend'] = None if not show_legend else y_column + ' '
+        bkh_figure.line(**kwargs)
         self._ngl += 1
 
+    @tracer
     def setup_model(self, **kwargs):
         try:
             """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
@@ -1428,6 +1465,8 @@ class SpectrumChannel(Channel):
             # setup the legend
             if show_legend:
                 self.__setup_legend(f)
+            # show tmp label
+            self._show_msg_label(f)
             # setup the toolbar
             self.__setup_toolbar(f)
             # store figure
@@ -1454,10 +1493,12 @@ class SpectrumChannel(Channel):
                 if sd.has_failed or sd.buffer is None:
                     min_len = 0
                     self._bad_source_cnt += 1
+                    self._animate_msg_label()
                     #print("emitting error...")
                     self.emit_error(sd)
                 else:
                     min_len = min(min_len, sd.buffer.shape[0])
+                    self._hide_msg_label()
             if not self._bad_source_cnt and previous_bad_source_cnt:
                 #print("emitting recover...")
                 self.emit_recover()
@@ -1565,7 +1606,7 @@ class ImageChannel(Channel):
         hpp = 'follow_mouse'
         figure.add_tools(PanTool())
         figure.add_tools(BoxZoomTool())
-        #figure.add_tools(WheelZoomTool())
+        figure.add_tools(WheelZoomTool())
         figure.add_tools(BoxSelectTool())
         figure.add_tools(ResizeTool())
         figure.add_tools(ResetTool())
@@ -1581,6 +1622,7 @@ class ImageChannel(Channel):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._mdl
 
+    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1607,10 +1649,10 @@ class ImageChannel(Channel):
             if layout != 'tabs':
                 f.title.text = self.name
             ikwargs = dict()
-            ikwargs['x'] = 0
-            ikwargs['y'] = 0
-            ikwargs['dw'] = 2
-            ikwargs['dh'] = 2
+            ikwargs['x'] = -1
+            ikwargs['y'] = -1
+            ikwargs['dw'] = 3
+            ikwargs['dh'] = 3
             ikwargs['image'] = 'image'
             ikwargs['source'] = self._cds
             ikwargs['color_mapper'] = LinearColorMapper(palette=props.get('palette', Plasma256))
@@ -1626,6 +1668,7 @@ class ImageChannel(Channel):
             self._rrd = f.rect(**rkwargs)
             f.xgrid.grid_line_color = None
             f.ygrid.grid_line_color = None
+            self._show_msg_label(f)
             self.__setup_toolbar(f)
             self._mdl = f
             bsm = props.get('selection_manager', None)
@@ -1657,8 +1700,11 @@ class ImageChannel(Channel):
                 nan_buffer = np.empty((2,2))
                 nan_buffer.fill(np.nan)
                 self._cur_row = 0
+                self._animate_msg_label()
             elif self._img_shape is not None and self._cur_row == sd.buffer.shape[0]:
                 return
+            else:
+                self._hide_msg_label()
             if empty_buffer:
                 xss = -1.
                 xse =  1.
@@ -1756,6 +1802,7 @@ class GenericChannel(Channel):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._delegate_model
 
+    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1975,10 +2022,11 @@ class LayoutChannel(Channel):
         self.__update_tabs_selection()
 
     def __update_tabs_selection(self):
-        # TODO: we might face a race condition between server periodic callback and user action
-        # TODO: mutex required?
+        # TODO: we might face a race condition between server periodic callback and user action: mutex required?
         at = self._tabs_widget.active
+        #self.debug('LayoutChannel.update_tabs_selection: selection id is {}'.format(at))
         cn = self._tabs_widget.tabs[at].title
+        #self.debug('LayoutChannel.update_tabs_selection: selection name is {}'.format(cn))
         self._channels[cn].update()
 
     def update(self):
