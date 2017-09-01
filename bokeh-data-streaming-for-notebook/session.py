@@ -10,11 +10,11 @@ from IPython.display import HTML, clear_output, display
 from tornado.ioloop import IOLoop
 
 from bokeh.io import output_notebook
-from bokeh.resources import INLINE
+from bokeh.resources import Resources, INLINE
 from bokeh.server.server import Server
 from bokeh.application import Application
 from bokeh.application.handlers import Handler, FunctionHandler
-from bokeh.embed import autoload_server
+from bokeh.embed import server_document
 
 module_logger_name = "fs.client.jupyter.session"
 
@@ -130,14 +130,14 @@ class BokehServer(object):
 
     @staticmethod
     def __start_server():
-        output_notebook(resources=INLINE, hide_banner=True)
+        #output_notebook(resources=INLINE, hide_banner=True)
+        output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
         app = Application(FunctionHandler(BokehServer.__session_entry_point))
-        app.add(BokehSessionHandler())
+        #TODO the following in broken since bokeh 0.12.7: app.add(BokehSessionHandler())
         srv = Server(
             {'/': app},
             io_loop=IOLoop.instance(),
             port=0,
-            host='*',
             allow_websocket_origin=['*']
         )
         srv.start()
@@ -178,7 +178,7 @@ class BokehServer(object):
         #TODO: should we lock BokehServer.__sessions__?
         BokehServer.__sessions__.appendleft(new_session)
         BokehServer.__logger__.debug("BokehServer.open_session.autoload server - url is {}".format(BokehServer.__srv_url__))
-        script = autoload_server(model=None, url=BokehServer.__srv_url__)
+        script = server_document(url=BokehServer.__srv_url__)
         html_display = HTML(script)
         display(html_display)
         BokehServer.__logger__.debug("BokehServer.open_session >>")

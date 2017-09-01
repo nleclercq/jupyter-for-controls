@@ -17,7 +17,7 @@ from bokeh.models.glyphs import Rect
 from bokeh.models.mappers import LinearColorMapper
 from bokeh.models.ranges import Range1d
 from bokeh.models.tools import BoxSelectTool, HoverTool, CrosshairTool
-from bokeh.models.tools import ResetTool, PanTool, BoxZoomTool, ResizeTool
+from bokeh.models.tools import ResetTool, PanTool, BoxZoomTool
 from bokeh.models.tools import WheelZoomTool, SaveTool
 from bokeh.models.widgets.markups import Div
 from bokeh.palettes import Plasma256
@@ -1215,7 +1215,6 @@ class ScalarChannel(Channel):
         figure.add_tools(PanTool())
         figure.add_tools(BoxZoomTool())
         figure.add_tools(WheelZoomTool())
-        figure.add_tools(ResizeTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
         figure.add_tools(HoverTool(tooltips=htt))
@@ -1394,7 +1393,6 @@ class SpectrumChannel(Channel):
         bkh_figure.add_tools(PanTool())
         bkh_figure.add_tools(BoxZoomTool())
         bkh_figure.add_tools(WheelZoomTool())
-        bkh_figure.add_tools(ResizeTool())
         bkh_figure.add_tools(ResetTool())
         bkh_figure.add_tools(SaveTool())
         bkh_figure.add_tools(HoverTool(tooltips=htt))
@@ -1608,7 +1606,6 @@ class ImageChannel(Channel):
         figure.add_tools(BoxZoomTool())
         figure.add_tools(WheelZoomTool())
         figure.add_tools(BoxSelectTool())
-        figure.add_tools(ResizeTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
         figure.add_tools(HoverTool(tooltips=htt, renderers=hrd, point_policy=hpp, callback=hcb))
