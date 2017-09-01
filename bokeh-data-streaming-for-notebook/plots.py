@@ -1186,9 +1186,10 @@ class ScalarChannel(Channel):
         self.__reinitialize()
 
     def __reinitialize(self):
-        self._cds = None  # column data source
-        self._mdl = None  # model
-        self._ngl = 0  # num of glyphs in figure
+        self._cds = None   # column data source
+        self._mdl = None   # model
+        self._lrdr = dict() # renderers (i.e. y line glyphs)
+        self._crdr = dict() # renderers (i.e. y circle glyphs)
 
     def get_model(self):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
@@ -1226,7 +1227,7 @@ class ScalarChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        fkwargs['output_backend'] = 'webgl'
+        #TODO: fkwargs['output_backend'] = 'webgl'
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
         fkwargs['toolbar_location'] = 'above'
@@ -1252,13 +1253,12 @@ class ScalarChannel(Channel):
         kwargs['x'] = '_@time@_'
         kwargs['y'] = data_source
         kwargs['source'] = self._cds
-        kwargs['line_color'] = ModelHelper.line_color(self._ngl)
-        figure.line(**kwargs)
+        kwargs['line_color'] = ModelHelper.line_color(len(self._rdr))
+        self._lrdr[data_source] = figure.line(**kwargs)
         kwargs['size'] = 3
-        kwargs['line_color'] = ModelHelper.line_color(self._ngl + 1)
+        kwargs['line_color'] = ModelHelper.line_color(len(self._rdr))
         kwargs['legend'] = None if not show_legend else data_source + ' '
-        figure.circle(**kwargs)
-        self._ngl += 1
+        self._crdr[data_source] = figure.circle(**kwargs)
 
     @tracer
     def setup_model(self, **kwargs):
@@ -1303,9 +1303,7 @@ class ScalarChannel(Channel):
             for sn, si in six.iteritems(self.data_sources):
                 #print("pulling data from {}...".format(sn))
                 data[sn] = sd = si.pull_data()
-                #print("pulling data from {}...".format(sn))
                 if sd.has_failed or sd.buffer is None:
-                    min_len = 0
                     self._bad_source_cnt += 1
                     self._animate_msg_label()
                     #print("emitting error...")
@@ -1324,9 +1322,13 @@ class ScalarChannel(Channel):
                         updated_data['_@time@_'] = data[cn].time_buffer[-min_len:]
                         time_scale_set = True
                     updated_data[cn] = data[cn].buffer[-min_len:]
+                    self._lrdr[cn].visible = True
+                    self._crdr[cn].visible = True
                 except Exception:
                     updated_data['_@time@_'] = np.zeros((min_len,), dtype=datetime.datetime)
                     updated_data[cn] = np.zeros((min_len,), np.float)
+                    self._lrdr[cn].visible = False
+                    self._crdr[cn].visible = False
             self._cds.data.update(updated_data)
         except Exception as e:
             raise
@@ -1345,13 +1347,13 @@ class SpectrumChannel(Channel):
         self.__reinitialize()
 
     def __reinitialize(self):
-        self._cds = None  # column data source
-        self._xsn = None  # x scale name #TODO: inject name into scale class
-        self._xsc = None  # x scale
-        self._ysc = None  # y scale
-        self._mdl = None  # model
-        self._ngl = 0     # num of glyphs in figure
-
+        self._cds = None   # column data source
+        self._xsn = None   # x scale name #TODO: inject name into scale class
+        self._xsc = None   # x scale
+        self._ysc = None   # y scale
+        self._mdl = None   # model
+        self._rdr = dict() # renderers (i.e. y glyphs)
+        
     def get_model(self):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._mdl
@@ -1404,7 +1406,7 @@ class SpectrumChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        fkwargs['output_backend'] = 'webgl'
+        #TODO: fkwargs['output_backend'] = 'webgl'
         fkwargs['x_range'] = self._xsc.bokeh_range
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
@@ -1428,10 +1430,9 @@ class SpectrumChannel(Channel):
         kwargs['x'] = self._xsn
         kwargs['y'] = y_column
         kwargs['source'] = self._cds
-        kwargs['line_color'] = ModelHelper.line_color(self._ngl)
+        kwargs['line_color'] = ModelHelper.line_color(len(self._rdr))
         kwargs['legend'] = None if not show_legend else y_column + ' '
-        bkh_figure.line(**kwargs)
-        self._ngl += 1
+        self._rdr[y_column] = bkh_figure.line(**kwargs)
 
     @tracer
     def setup_model(self, **kwargs):
@@ -1487,9 +1488,7 @@ class SpectrumChannel(Channel):
             for sn, si in six.iteritems(self.data_sources):
                 #print("pulling data from {}...".format(sn))
                 data[sn] = sd = si.pull_data()
-                #print("pulling data from {}...".format(sn))
                 if sd.has_failed or sd.buffer is None:
-                    min_len = 0
                     self._bad_source_cnt += 1
                     self._animate_msg_label()
                     #print("emitting error...")
@@ -1501,7 +1500,11 @@ class SpectrumChannel(Channel):
                 #print("emitting recover...")
                 self.emit_recover()
             updated_data = dict()
-            if not min_len or self._xsc.type == ScaleType.INDEXES:
+            if self._bad_source_cnt:
+                min_len = 3
+                updated_data[self._xsn] = np.linspace(-1, 1, min_len)
+                self._mdl.x_range.update(start=-1, end=1)
+            elif self._xsc.type == ScaleType.INDEXES:
                 updated_data[self._xsn] = np.linspace(0, min_len - 1, min_len)
                 self._mdl.x_range.update(start=0, end=min_len-1)
             elif self._xsc.type == ScaleType.RANGE:
@@ -1511,6 +1514,8 @@ class SpectrumChannel(Channel):
                 self._mdl.x_range.update(start=self._xsc.start, end=end_point)
             else:
                 try:
+                    if self._bad_source_cnt:
+                        raise Exception('at least one source failed!')
                     x_scale_data = data[self._xsn].buffer[:min_len]
                     updated_data[self._xsn] = x_scale_data
                     self._mdl.x_range.update(start=x_scale_data[0], end=x_scale_data[min_len-1])
@@ -1521,8 +1526,10 @@ class SpectrumChannel(Channel):
                 try:
                     if cn != self._xsn:
                         updated_data[cn] = data[cn].buffer[:min_len]
+                        self._rdr[cn].visible = True
                 except Exception:
                     updated_data[cn] = np.zeros((min_len,), np.float)
+                    self._rdr[cn].visible = False
             self._cds.data.update(updated_data)
         except Exception as e:
             self.error(e)
@@ -1632,7 +1639,7 @@ class ImageChannel(Channel):
             self._ysc.validate()
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
-            fkwargs['output_backend'] = 'webgl'
+            #TODO: fkwargs['output_backend'] = 'webgl'
             fkwargs['x_range'] = self._xsc.bokeh_range
             fkwargs['y_range'] = self._ysc.bokeh_range
             fkwargs['width'] = props.get('width', 320)
