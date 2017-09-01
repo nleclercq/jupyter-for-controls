@@ -187,7 +187,7 @@ class ChannelData(object):
         # format
         self._format = ChannelData.Format.UNKNOWN
         # data buffer (numpy ndarray)
-        self._buffer = np.zeros((0,0))
+        self._buffer = np.zeros((1,1))
         # time buffer (numpy ndarray)
         self._time_buffer = None
         # update failed - data is invalid
@@ -1197,10 +1197,10 @@ class ScalarChannel(Channel):
     def __instanciate_data_source(self):
         columns = OrderedDict()
         # add an entry for timestamp
-        columns['_@time@_'] = np.zeros(0)
+        columns['_@time@_'] = np.zeros(1)
         # add an entry for each child
         for cn, ci in six.iteritems(self.data_sources):
-            columns[cn] = np.zeros(0)
+            columns[cn] = np.zeros(1)
         return ColumnDataSource(data=columns)
 
     def __setup_legend(self, figure):
@@ -1359,10 +1359,10 @@ class SpectrumChannel(Channel):
     def __instanciate_data_source(self):
         columns = OrderedDict()
         # add an entry for x scale data (for indexes or range scales)
-        columns[self._xsn] = np.zeros(0)
+        columns[self._xsn] = np.zeros(1)
         # add an entry for each child
         for cn, ci in six.iteritems(self.data_sources):
-            columns[cn] = np.zeros(0)
+            columns[cn] = np.zeros(1)
         return ColumnDataSource(data=columns)
 
     def __validate_x_channel(self):
@@ -1456,7 +1456,7 @@ class SpectrumChannel(Channel):
             f = self.__setup_figure(**props)
             # setup glyphs
             show_legend = False if len(self.data_sources) == 1 else True
-            sshow_legend = props.get('show_legend', show_legend)
+            show_legend = props.get('show_legend', show_legend)
             for data_source in self.data_sources:
                 if data_source != self._xsn:
                     self.__setup_glyph(f, data_source, show_legend)
