@@ -1253,10 +1253,10 @@ class ScalarChannel(Channel):
         kwargs['x'] = '_@time@_'
         kwargs['y'] = data_source
         kwargs['source'] = self._cds
-        kwargs['line_color'] = ModelHelper.line_color(len(self._rdr))
+        kwargs['line_color'] = ModelHelper.line_color(len(self._lrdr))
         self._lrdr[data_source] = figure.line(**kwargs)
         kwargs['size'] = 3
-        kwargs['line_color'] = ModelHelper.line_color(len(self._rdr))
+        kwargs['line_color'] = ModelHelper.line_color(len(self._crdr))
         kwargs['legend'] = None if not show_legend else data_source + ' '
         self._crdr[data_source] = figure.circle(**kwargs)
 
