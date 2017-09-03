@@ -23,6 +23,7 @@ from bokeh.models.widgets.markups import Div
 from bokeh.palettes import Plasma256
 from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
+from bokeh.events import SelectionGeometry, Reset
 
 from tools import *
 from session import BokehSession
@@ -909,17 +910,26 @@ class BoxSelectionManager(NotebookCellContent):
 
     def register_figure(self, bkh_figure):
         try:
-            bst = bkh_figure.select(BoxSelectTool)[0]
-            bst.callback = self.__box_selection_callback()
-        except:
-            return
-        #try:
-        #    rst = bkh_figure.select(ResetTool)[0]
-        #    rst.js_on_change('do', self.__reset_callback())
-        #except:
-        #    return
+            bkh_figure.js_on_event(SelectionGeometry, self.__box_selection_callback())
+            bkh_figure.on_event(SelectionGeometry, self.__print_event(attributes=['geometry', 'final']))
+        except Exception as e:
+           print(e)
+           return
+        try:
+            bkh_figure.js_on_event(Reset, self.__reset_callback())
+            bkh_figure.on_event(Reset, self.__print_event())
+        except Exception as e:
+           print(e)
+           return
         rect = self.__selection_glyph()
         bkh_figure.add_glyph(self._selection_cds, glyph=rect, selection_glyph=rect, nonselection_glyph=rect)
+
+    def __print_event(self, attributes=[]):
+        def python_callback(event):
+            cls_name = event.__class__.__name__
+            attrs = ', '.join(['{attr}={val}'.format(attr=attr, val=event.__dict__[attr]) for attr in attributes])
+            print('{cls_name}({attrs})'.format(cls_name=cls_name, attrs=attrs))
+        return python_callback
 
     def __box_selection_callback(self):
         return CustomJS(args=dict(cds=self._selection_cds), code="""
@@ -931,8 +941,7 @@ class BoxSelectionManager(NotebookCellContent):
                         output : handle_output,
                 }
             }
-            var data = cds.data
-            var geometry = cb_data['geometry']
+            var geometry = cb_obj['geometry']
             var width = geometry['x1'] - geometry['x0']
             var height = geometry['y1'] - geometry['y0']
             var x0 = geometry['x0'] + width / 2
@@ -941,6 +950,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['y0'][0] = y0
             cds.data['width'][0] = width
             cds.data['height'][0] = height
+            cds.change.emit()
             var imp = "from plots import BoxSelectionManager;"
             var pfx = "BoxSelectionManager.repository[".concat(cds.tags[0], "].on_selection_change(")
             var arg = JSON.stringify({'x0':[x0], 'y0':[y0], 'width':[width], 'height':[height]})
@@ -957,6 +967,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['y0'][0] = 0
             cds.data['width'][0] = 0
             cds.data['height'][0] = 0
+            cds.change.emit()
             var imp = "from plots import BoxSelectionManager;"
             var rst = "BoxSelectionManager.repository[".concat(cds.tags[0],"].on_selection_reset()")
             var cmd  = imp.concat(rst)
