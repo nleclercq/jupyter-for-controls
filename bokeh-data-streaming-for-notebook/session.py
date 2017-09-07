@@ -98,18 +98,32 @@ class BokehSession(object):
   
     def pause(self):
         """suspend the (periodic) callback"""
-        BokehServer.update_callback_period(self, None)
+        self.__set_callback_period(None)
         self._suspended = True
     
     def resume(self):
         """resume the (periodic) callback"""
-        BokehServer.update_callback_period(self, self.callback_period)
+        self.__set_callback_period(self.callback_period)
         self._suspended = False
 
-    def update_callback_period(self, ucbp):
-        """update the (periodic) callback"""
-        self.callback_period = ucbp
-        BokehServer.update_callback_period(self, self.callback_period)
+    def update_callback_period(self, cbp):
+        self.callback_period = cbp
+        self.__set_callback_period(cbp)
+
+    def __set_callback_period(self, cbp):
+        try:
+            self.document.remove_periodic_callback(self.periodic_callback)
+        except:
+            pass
+        if cbp is not None:
+            self.document.add_periodic_callback(self.periodic_callback, max(100, int(1000. * cbp)))
+
+    def timeout_callback(self, cb, tmo):
+        """call the specified callback after the specified timeout (in seconds) expires"""
+        if self._doc:
+            #print('BokehSession.timeout_callback: installing timeout callback...')
+            self._doc.add_timeout_callback(cb, int(1000. * tmo))
+            #print('BokehSession.timeout_callback: timeout callback installed: cb {} will be called in {} seconds'.format(cb, tmo))
 
     def safe_document_modifications(self, cb):
         """call the specified callback in the a context in which the session document is locked"""
@@ -130,7 +144,7 @@ class BokehServer(object):
 
     @staticmethod
     def __start_server():
-        #output_notebook(resources=INLINE, hide_banner=True)
+        logging.getLogger('bokeh.server.util').setLevel(logging.ERROR) #TODO: tmp stuff
         output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
         app = Application(FunctionHandler(BokehServer.__session_entry_point))
         #TODO the following in broken since bokeh 0.12.7: app.add(BokehSessionHandler())
@@ -155,17 +169,6 @@ class BokehServer(object):
             BokehServer.__logger__.debug('BokehServer.__session_entry_point [doc:{}] >>'.format(id(doc)))
         except Exception as e:
             print(e)
-
-    @staticmethod
-    def __add_periodic_callback(session, ucbp):
-        assert(isinstance(session, BokehSession))
-        pcb = session.periodic_callback
-        try:
-            session.document.remove_periodic_callback(pcb)
-        except:
-            pass
-        if ucbp is not None:
-            session.document.add_periodic_callback(pcb, max(100, 1000. * ucbp))
         
     @staticmethod
     def open_session(new_session):
@@ -175,7 +178,6 @@ class BokehServer(object):
             BokehServer.__logger__.debug("BokehServer.open_session.starting server")
             BokehServer.__start_server()
             BokehServer.__logger__.debug("BokehServer.open_session.server started")
-        #TODO: should we lock BokehServer.__sessions__?
         BokehServer.__sessions__.appendleft(new_session)
         BokehServer.__logger__.debug("BokehServer.open_session.autoload server - url is {}".format(BokehServer.__srv_url__))
         script = server_document(url=BokehServer.__srv_url__)
@@ -191,11 +193,6 @@ class BokehServer(object):
         bkh_session = BokehServer.__bkh_srv__.get_session('/', session_id)
         bkh_session.destroy()
         session._on_session_destroyed()
-        
-    @staticmethod
-    def update_callback_period(session, ucbp):
-        assert(isinstance(session, BokehSession))
-        BokehServer.__add_periodic_callback(session, ucbp)
         
     @staticmethod
     def print_info(called_from_session_handler=False):

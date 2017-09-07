@@ -3,7 +3,6 @@ from __future__ import print_function
 import datetime
 from collections import OrderedDict, deque
 from math import ceil, pi
-from random import randint
 import six
 
 import ipywidgets as widgets
@@ -23,7 +22,7 @@ from bokeh.models.widgets.markups import Div
 from bokeh.palettes import Plasma256
 from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
-from bokeh.events import SelectionGeometry, Reset
+import bokeh.events
 
 from tools import *
 from session import BokehSession
@@ -499,7 +498,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         """asks each Channel to cleanup itself (e.g. release resources)"""
         for channel in self._channels.values():
             try:
-                self.info("DataStream : cleaning up Channel {}".format(channel.name))
+                self.info("DataStream: cleaning up Channel {}".format(channel.name))
                 channel.cleanup()
             except Exception as e:
                 self.error(e)
@@ -509,18 +508,12 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     """a data stream manager embedded a bokeh server"""
 
-    # output_notebook_called = False
-
-    def __init__(self, name, data_streams, update_period=None, auto_start=False):
+    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0.):
         # route output to current cell
         NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
         DataStreamEventHandler.__init__(self, name)
         BokehSession.__init__(self)
-        # configure the default output state to generate output in Jupyter notebook cells
-        #if not DataStreamer.output_notebook_called:
-        #   output_notebook(resources=INLINE, hide_banner=True)
-        #   DataStreamer.output_notebook_called = True
-        # a FIFO sot store incoming DataStreamEvent
+        # a FIFO to store incoming DataStreamEvent
         self._events = deque()
         # update period in seconds
         self.callback_period = update_period
@@ -529,6 +522,8 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         self.add(data_streams)
         # auto start
         self._auto_start = auto_start
+        # start delay
+        self._start_delay = start_delay
         # open the session
         self.open()
 
@@ -566,7 +561,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         """close the session"""
         # suspend periodic callback 
         self.pause()
-        # the unerlying actions will be performed under critical section
+        # the underlying actions will be performed under critical section
         self.safe_document_modifications(self.__close)
 
     @tracer
@@ -588,14 +583,20 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         self.debug("DataStreamer: Bokeh session closed")
 
     @tracer
-    def start(self):
+    def start(self, delay=0.):
         """start periodic activity"""
         if not self.ready:
             self.debug("DataStreamer.start:session not ready:set auto_start to True")
             self._auto_start = True
         else:
-            self.debug("DataStreamer.start:session ready:resuming")
-            self.resume()
+            actual_tmo = delay if delay > 0. else self._start_delay
+            if actual_tmo > 0.:
+                print('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
+                self._start_delay = 0.
+                self.timeout_callback(self.start, actual_tmo)
+            else:
+                self.debug("DataStreamer.start: session ready, no delay, resuming...")
+                self.resume()
 
     @tracer
     def stop(self):
@@ -625,7 +626,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
             except Exception as e:
                 self.error(e)
             if self._auto_start:
-                self.start()
+                self.start(self._start_delay)
         except Exception as e:
             self.error(e)
             raise
@@ -658,9 +659,9 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         return self.callback_period
 
     @update_period.setter
-    def update_period(self, update_period):
+    def update_period(self, up):
         """set the update period (in seconds)"""
-        self.update_callback_period(update_period)
+        self.update_callback_period(up)
 
     def periodic_callback(self):
         """the session periodic callback"""
@@ -910,21 +911,20 @@ class BoxSelectionManager(NotebookCellContent):
 
     def register_figure(self, bkh_figure):
         try:
-            bkh_figure.js_on_event(SelectionGeometry, self.__box_selection_callback())
-            bkh_figure.on_event(SelectionGeometry, self.__print_event(attributes=['geometry', 'final']))
+            bkh_figure.js_on_event(bokeh.events.SelectionGeometry, self.__box_selection_callback())
+            bkh_figure.on_event(bokeh.events.SelectionGeometry, self.__print_event(attributes=['geometry', 'final']))
         except Exception as e:
-           print(e)
-           return
+            print(e)
         try:
-            bkh_figure.js_on_event(Reset, self.__reset_callback())
-            bkh_figure.on_event(Reset, self.__print_event())
+            bkh_figure.js_on_event(bokeh.events.Reset, self.__reset_callback())
+            bkh_figure.on_event(bokeh.events.Reset, self.__print_event())
         except Exception as e:
-           print(e)
-           return
+            #TODO: print(e)
+            pass
         rect = self.__selection_glyph()
         bkh_figure.add_glyph(self._selection_cds, glyph=rect, selection_glyph=rect, nonselection_glyph=rect)
 
-    def __print_event(self, attributes=[]):
+    def __print_event(self, attributes=list()):
         def python_callback(event):
             cls_name = event.__class__.__name__
             attrs = ', '.join(['{attr}={val}'.format(attr=attr, val=event.__dict__[attr]) for attr in attributes])
@@ -1577,12 +1577,7 @@ class ImageChannel(Channel):
         columns['x_hover'] = [0]
         columns['y_hover'] = [0]
         columns['z_hover'] = [0]
-        image_shape = self.model_properties.get('image_shape', None)
-        if image_shape is not None and isinstance(image_shape, tuple) and len(image_shape) == 2 and all(image_shape):
-            self._img_shape = image_shape
-        if self._img_shape is None:
-            image_shape = (2, 2)
-        data = np.empty(image_shape)
+        data = np.empty((2, 2))
         data.fill(np.nan)
         columns['image'] = [data]
         return ColumnDataSource(data=columns)
@@ -1650,7 +1645,7 @@ class ImageChannel(Channel):
             self._ysc.validate()
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
-            #TODO: fkwargs['output_backend'] = 'webgl'
+            #fkwargs['output_backend'] = 'webgl'
             fkwargs['x_range'] = self._xsc.bokeh_range
             fkwargs['y_range'] = self._ysc.bokeh_range
             fkwargs['width'] = props.get('width', 320)
@@ -1669,6 +1664,16 @@ class ImageChannel(Channel):
             ikwargs['dw'] = 3
             ikwargs['dh'] = 3
             ikwargs['image'] = 'image'
+            ffs = props.get('full_frame_shape', None)
+            #print("full_frame_shape: {}".format(ffs))
+            if ffs is not None and isinstance(ffs, (tuple, list)) and len(ffs) >= 2 and all(ffs):
+                #print("reshaping image data...")
+                self._img_shape = tuple(ffs)
+                #print("image shape: {}".format(self._img_shape))
+                img_data = np.empty(self._img_shape)
+                img_data.fill(np.nan)
+                self._cds.data['image'] = [img_data]
+                #print("image reshaped!")
             ikwargs['source'] = self._cds
             ikwargs['color_mapper'] = LinearColorMapper(palette=props.get('palette', Plasma256))
             self._ird = f.image(**ikwargs)
@@ -1774,19 +1779,23 @@ class ImageChannel(Channel):
                 new_data['image'] = [sd.buffer] if not empty_buffer else [nan_buffer]
             else:
                 if empty_buffer:
-                    return #TODO: should we chnage this?
-                #self.debug("ImageChannel: update: current row is {}".format(self._cur_row))
-                #self.debug("ImageChannel: update: incoming data shape {}".format(sd.buffer.shape))
+                    #print("ImageChannel.update: nothing to do (empty_buffer)")
+                    return #TODO: should we change this?
+                #print("ImageChannel: update: current row is {}".format(self._cur_row))
+                #print("ImageChannel: update: incoming data shape {}".format(sd.buffer.shape))
+                if self._cur_row == sd.buffer.shape[0]:
+                    #print("ImageChannel.update: (row index didn't change)")
+                    return
                 row_index = self._cur_row if self._cur_row > 0 else None
                 s1, s2 = slice(row_index, sd.buffer.shape[0], 1), slice(None)
-                #self.debug("ImageChannel: update: slices are {}:{}".format(s1,s2))
+                #print("ImageChannel: update: slices are {}:{}".format(s1,s2))
                 index = [0, s1, s2]
-                #self.debug("ImageChannel: index is {}".format(index))
+                #print("ImageChannel: index is {}".format(index))
                 new_rows = sd.buffer[s1, s2].flatten()
-                #self.debug("ImageChannel: new_rows are {}".format(new_rows))
+                #print("ImageChannel: new_rows are {}".format(new_rows))
                 self._cds.patch({'image': [(index, new_rows)]})
                 self._cur_row = sd.buffer.shape[0]
-                #self.debug("ImageChannel: update: current row is now {}".format(self._cur_row))
+                #print("ImageChannel: update: current row is now {}".format(self._cur_row))
             new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
             new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
             new_data['x_scale'] = [[xss, xse, xst, w]]
