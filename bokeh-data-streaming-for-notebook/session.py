@@ -119,15 +119,13 @@ class BokehSession(object):
             self.document.add_periodic_callback(self.periodic_callback, max(100, int(1000. * cbp)))
 
     def timeout_callback(self, cb, tmo):
-        """call the specified callback after the specified timeout (in seconds) expires"""
-        if self._doc:
-            #print('BokehSession.timeout_callback: installing timeout callback...')
+        """call the specified callback after expiration of the specified timeout (in seconds)"""
+        if self.ready:
             self._doc.add_timeout_callback(cb, int(1000. * tmo))
-            #print('BokehSession.timeout_callback: timeout callback installed: cb {} will be called in {} seconds'.format(cb, tmo))
 
     def safe_document_modifications(self, cb):
         """call the specified callback in the a context in which the session document is locked"""
-        if self._doc:
+        if self.ready:
             self._doc.add_next_tick_callback(cb)
 
 
