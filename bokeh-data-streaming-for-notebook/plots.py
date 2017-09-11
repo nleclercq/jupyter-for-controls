@@ -594,7 +594,7 @@ class BoxSelectionManager(NotebookCellContent):
 # ------------------------------------------------------------------------------
 class InteractionsManager(object):
     
-    def __init__(self, bks):
+    def __init__(self):
         self._session = None
         self._callback = None
         self._range_change_notified = False
@@ -1196,9 +1196,7 @@ class ImageChannel(Channel):
         self.__reinitialize()
 
     def __reinitialize(self):
-        self._ds = None # last data receive from the associated source
-        self._img_shape = None # full image shape
-        self._cur_row = 0 # current row index
+        self._sd = None # last data receive from the associated source
         self._cds = None # column data source
         self._mdl = None # model
         self._xsc = None # x scale
@@ -1206,6 +1204,8 @@ class ImageChannel(Channel):
         self._ird = None # image renderer
         self._rrd = None # rect renderer for hover trick
         self._itm = InteractionsManager() # an InteractionsManager
+        self._expected_image_shape = None
+        self._current_image_shape = None
 
     def __instanciate_data_source(self):
         columns = dict()
@@ -1282,6 +1282,8 @@ class ImageChannel(Channel):
             self._xsc.validate()
             self._ysc = props.get('y_scale', Scale())
             self._ysc.validate()
+            self._expected_image_shape = self.model_properties.get('full_frame_shape', None)
+            self.__setup_undefined_scales(self._expected_image_shape)
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
             #fkwargs['output_backend'] = 'webgl'
@@ -1300,8 +1302,8 @@ class ImageChannel(Channel):
             ikwargs = dict()
             ikwargs['x'] = -1
             ikwargs['y'] = -1
-            ikwargs['dw'] = 3
-            ikwargs['dh'] = 3
+            ikwargs['dw'] = 2
+            ikwargs['dh'] = 2
             ikwargs['image'] = 'image'
             ikwargs['source'] = self._cds
             ikwargs['color_mapper'] = LinearColorMapper(palette=props.get('palette', Plasma256))
@@ -1323,70 +1325,129 @@ class ImageChannel(Channel):
             bsm = props.get('selection_manager', None)
             if bsm:
                 bsm.register_figure(f)
-            self._itm.setup(self.bokeh_session, self._mdl, self._handle_range_change)
+            self._itm.setup(self.bokeh_session, self._mdl, self.__handle_range_change)
         except Exception as e:
             self.error(e)
         return self._mdl
 
-    def handle_range_change(self):
+    def __setup_undefined_scales(self, img_shape, force=False):
+        #print("__setup_undefined_scales.img_shape: {}".format(img_shape))
+        if img_shape is None:
+            return
+        #print("__setup_undefined_scales._xsc.has_valid_scale: {}".format(self._xsc.has_valid_scale()))
+        if force or not self._xsc.has_valid_scale():
+            skwargs = dict()
+            skwargs['start'] = 0
+            skwargs['end'] = img_shape[1] - 1
+            skwargs['num_points'] = img_shape[1]
+            self._xsc = Scale(**skwargs)
+        #print("__setup_undefined_scales._ysc.has_valid_scale: {}".format(self._ysc.has_valid_scale()))
+        if force or not self._ysc.has_valid_scale():
+            skwargs = dict()
+            skwargs['start'] = 0
+            skwargs['end'] = img_shape[0] - 1
+            skwargs['num_points'] = img_shape[0]
+            self._ysc = Scale(**skwargs)
+
+    def __handle_range_change(self):
         try:
-            if not self._ds or sd.has_failed or not sum(sd.buffer.shape):
+            #print("handle_range_change <<")
+            sd = self._sd
+            if not sd or sd.has_failed or not sum(sd.buffer.shape):
                 return
-
-            xsc, xec = self._mdl.x_range.start, self._mdl.x_range.end
-            xx = np.linspace(xsc, xec, num=sd.buffer.shape[1], dtype=float)
-            xy = np.linspace(0, sd.buffer.shape[1] - 1, num=sd.buffer.shape[1], dtype=int)
-
-            ysc, yec = self._mdl.y_range.start, self._mdl.y_range.end
-            yx = np.linspace(ysc, yec, num=sd.buffer.shape[0], dtype=float)
-            yy = np.linspace(0, sd.buffer.shape[0] - 1, num=sd.buffer.shape[0], dtype=int)
-
-            xsi, xei = mt.floor(np.interp(xsc, xx, xy)), mt.ceil(np.interp(xec, xx, xy)) + 1
-            ysi, yei = mt.floor(np.interp(ysc, yx, yy)), mt.ceil(np.interp(yec, yx, yy)) + 1
-
-            image = sd.buffer[ysi:yei, xsi:xei]
-            num_pixels = image.shape[0] * image.shape[1]
-            need_rescale, rescaling_factor = self.compute_rescaling_factor(num_pixels)
-            if need_rescale:
-                image = self.rescale_image(image, rescaling_factor)
-                
+            image = self.__extract_image_for_current_ranges(sd.buffer)
             self._cds.data.update(image=[image])
-            self._ird.glyph.update(x=xsc, 
-                                   y=self._plt.y_range.start, 
-                                   dw=abs(self._plt.x_range.end - self._plt.x_range.start), 
-                                   dh=abs(self._plt.y_range.end - self._plt.y_range.start))
+            self._ird.glyph.update(x=self._mdl.x_range.start,
+                                   y=self._mdl.y_range.start,
+                                   dw=abs(self._mdl.x_range.end - self._mdl.x_range.start),
+                                   dh=abs(self._mdl.y_range.end - self._mdl.y_range.start))
+        except Exception as e:
+            print(e)
         finally:
             self._itm.range_change_handled()
+            #print("handle_range_change >>")
+
+    def __image_shape_changed(self, image_shape):
+        return self._current_image_shape != image_shape
+
+    def __extract_image_for_current_ranges(self, image):
+        xsc = self._mdl.x_range.start
+        xec = self._mdl.x_range.end
+        xx = np.linspace(self._xsc.start, self._xsc.end, num=image.shape[1], dtype=float)
+        xy = np.linspace(0, image.shape[1] - 1, num=image.shape[1], dtype=int)
+        #print("__extract_image_for_current_ranges.2")
+        ysc = self._mdl.y_range.start
+        yec = self._mdl.y_range.end
+        #print("extract_image_for_current_ranges: x:({:.04f}, {:.04f}) - y:({:.04f} -> {:.04f})".format(xsc, xec, ysc, yec))
+        yx = np.linspace(self._ysc.start, self._ysc.end, num=image.shape[0], dtype=float)
+        yy = np.linspace(0, image.shape[0] - 1, num=image.shape[0], dtype=int)
+        xsi = int(mt.floor(np.interp(xsc, xx, xy)))
+        xei = int(mt.ceil(np.interp(xec, xx, xy)) + 1)
+        ysi = int(mt.floor(np.interp(ysc, yx, yy)))
+        yei = int(mt.ceil(np.interp(yec, yx, yy)) + 1)
+        #print("extract_image_for_current_ranges: x:[{:.00f} -> {:.00f}] - y:[{:.00f} -> {:.00f}]".format(xsi, xei, ysi, yei))
+        image = image[ysi:yei, xsi:xei]
+        #print("extract_image_for_current_ranges.sub_image.shape: {}".format(image.shape))
+        need_rescale, rescaling_factor = self.__compute_rescaling_factor(image)
+        if need_rescale:
+            image = self.__rescale_image(image, rescaling_factor)
+            #print("extract_image_for_current_ranges.sub_image.rescaled to {}".format(image.shape))
+        return image
+
+    def __compute_rescaling_factor(self, image, image_size_threshold=10000):
+        try:
+            rescaling_factor = 1.0
+            initial_image_size = image_size = image.shape[0] * image.shape[1]
+            #print("compute_rescaling_factor: size: {:.04f} - threshold: {:.04f}".format(image_size, image_size_threshold))
+            if image_size <= image_size_threshold:
+                #print("compute_rescaling_factor: no rescaling required")
+                return False, rescaling_factor
+            for inc in [0.1, 0.01, 0.001, 0.0001]:
+                while image_size > image_size_threshold:
+                    rescaling_factor -= inc
+                    image_size = int(initial_image_size * rescaling_factor)
+                rescaling_factor += inc
+                image_size = int(initial_image_size * rescaling_factor)
+            rescaling_factor = mt.sqrt(rescaling_factor)
+            #print("compute_rescaling_factor.rescaling factor: {:.04f}".format(rescaling_factor))
+            return True, rescaling_factor
+        except Exception as e:
+            print(e)
+
+    def __rescale_image(self, in_img, rescaling_factor):
+        #print('rescale-image: in shape {}'.format(in_img.shape))
+        out_img = rescale(in_img, rescaling_factor, mode='constant', cval=np.nan)
+        #print('rescale-image: out shape {}'.format(out_img.shape))
+        return out_img
 
     def update(self, update_image=True):
         """gives each Channel a chance to update itself (e.g. to update the ColumnDataSources)"""
         try:
-            if update_image:
-                self._ds = self.data_source
-            ds = self._ds
+            ds = self.data_source
             if ds is None:
                 return
-            sd = ds.pull_data()
+            if update_image:
+                self._sd = ds.pull_data()
+            sd = self._sd
             previous_bad_source_cnt = self._bad_source_cnt
             if sd.has_failed:
-                #print("emitting error...")
                 self._bad_source_cnt = 1
                 self.emit_error(sd)
             elif previous_bad_source_cnt:
-                #print("emitting recover...")
                 self._bad_source_cnt = 0
                 self.emit_recover()
-            empty_buffer = sd.has_failed or not sum(sd.buffer.shape)
+            empty_buffer = sd.has_failed or not all(sd.buffer.shape)
             nan_buffer = None
             if empty_buffer:
                 nan_buffer = np.empty((2,2))
                 nan_buffer.fill(np.nan)
-                self._cur_row = 0
                 self._animate_msg_label()
-            elif self._img_shape is not None and self._cur_row == sd.buffer.shape[0]:
-                return
             else:
                 self._hide_msg_label()
+            image_shape_changed = self.__image_shape_changed(sd.buffer.shape)
+            self._current_image_shape = sd.buffer.shape if not empty_buffer else nan_buffer.shape
+            if not empty_buffer:
+                self.__setup_undefined_scales(sd.buffer.shape)
             if empty_buffer:
                 xss = -1.
                 xse =  1.
@@ -1394,8 +1455,7 @@ class ImageChannel(Channel):
                 xpn =  3
             elif self._xsc.type != ScaleType.INDEXES:
                 xss = self._xsc.start
-                row_index = self._cur_row is self._cur_row
-                if self._img_shape is None:
+                if self._expected_image_shape is None:
                     xse = self._xsc.start + ((sd.buffer.shape[1] - 1) * self._xsc.step)
                 else:
                     xse = self._xsc.end
@@ -1413,7 +1473,7 @@ class ImageChannel(Channel):
                 ypn =  3
             elif self._ysc.type != ScaleType.INDEXES:
                 yss = self._ysc.start
-                if self._img_shape is None:
+                if self._expected_image_shape is None:
                     yse = self._ysc.start + ((sd.buffer.shape[0] - 1) * self._ysc.step)
                 else:
                     yse = self._ysc.end
@@ -1432,18 +1492,25 @@ class ImageChannel(Channel):
             if not h:
                 yss = -1.
                 yse =  1.
+            if image_shape_changed:
+                #print('image shape changed...')
+                self._mdl.x_range.update(start=xss, end=xse)
+                self._mdl.y_range.update(start=yss, end=yse)
+                self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
+                self._rrd.glyph.update(x=xss + w / 2, y=yss + h / 2, width=w, height=h)
+            else:
+                x = self._mdl.x_range.start
+                y = self._mdl.y_range.start
+                dw = abs(self._mdl.x_range.end - self._mdl.x_range.start)
+                dh = abs(self._mdl.y_range.end - self._mdl.y_range.start)
+                self._ird.glyph.update(x=x, y=y, dw=dw, dh=dh)
+                self._rrd.glyph.update(x=x + dw/2, y=y + dh/2, width=dw, height=dh)
             if not empty_buffer:
-                image = sd.buffer
-                num_pixels = image.shape[0] * image.shape[1]
-                need_rescale, rescaling_factor = self.compute_rescaling_factor(num_pixels)
-                if need_rescale:
-                    image = self.rescale_image(image, rescaling_factor)
-            self._mdl.x_range.update(start=xss, end=xse) 
-            self._mdl.y_range.update(start=yss, end=yse)
-            self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
-            self._rrd.glyph.update(x=xss + w/2, y=yss + h/2, width=w, height=h)
-            new_data = dict()      
-            new_data['image'] = [image] if not empty_buffer else [nan_buffer]
+                image = self.__extract_image_for_current_ranges(sd.buffer)
+            else:
+                image = nan_buffer
+            new_data = dict()
+            new_data['image'] = [image]
             new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
             new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
             new_data['x_scale'] = [[xss, xse, xst, w]]
@@ -1453,24 +1520,8 @@ class ImageChannel(Channel):
             new_data['z_hover'] = [self._cds.data['z_hover'][0]]
             self._cds.data.update(new_data)
         except Exception as e:
+            print(e)
             self.error(e)
-
-    def compute_rescaling_factor(self, image_size, image_size_threshold=100000):
-        rescaling_factor = 1.0
-        img_size = intial_img_size = image_size
-        if img_size <= image_size_threshold:
-            return False, rescaling_factor
-        for inc in [0.1, 0.01, 0.001, 0.0001]:
-            while img_size > image_size_threshold:
-                rescaling_factor -= inc
-                img_size = int(intial_img_size * rescaling_factor)
-            rescaling_factor += inc
-            img_size = int(intial_img_size * rescaling_factor)
-        rescaling_factor = mt.sqrt(rescaling_factor)
-        return True, rescaling_factor
-
-    def rescale_image(self, in_img, rescaling_factor):
-        return rescale(in_img, rescaling_factor, mode='constant', cval=np.nan)
 
     def cleanup(self):
         self.__reinitialize()
@@ -1564,11 +1615,11 @@ class LayoutChannel(Channel):
         self._channels.register_add_callback(self.__on_add_channel)
         self.add(channels)
 
-    @bokeh_session.context.setter
+    @Channel.bokeh_session.setter
     def bokeh_session(self, bks):
         """overwrites Channel.bokeh_session.setter"""
         assert (isinstance(bks, BokehSession))
-        super(LayoutChannel, self).bokeh_session = bks
+        self._session = bks
         for channel in self._channels.values():
             channel.bokeh_session = bks
 
@@ -1576,7 +1627,7 @@ class LayoutChannel(Channel):
     def context(self, new_context):
         """overwrites NotebookCellContent.context.setter"""
         assert (isinstance(new_context, CellContext))
-        super(LayoutChannel, self).context = new_context
+        self._context = new_context
         for channel in self._channels.values():
             channel.context = new_context
 
