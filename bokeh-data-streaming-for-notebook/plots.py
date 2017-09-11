@@ -1226,29 +1226,29 @@ class ImageChannel(Channel):
             var geom = cb_data['geometry']
             var hx = geom.x
             var hy = geom.y
-            // console.log('hx,hy = %f,%f', hx, hy)
+            //console.log('hx,hy = %f,%f', hx, hy)
             var xsd = cds.data['x_scale_data'][0]
-            // console.log('xs-start,xs-end = %f,%f', xsd[0], xsd[xsd.length - 1])
+            //console.log('xs-start,xs-end = %f,%f', xsd[0], xsd[xsd.length - 1])
             var ysd = cds.data['y_scale_data'][0]
-            // console.log('ys-start,ys-end = %f,%f', ysd[0], ysd[ysd.length - 1])
+            //console.log('ys-start,ys-end = %f,%f', ysd[0], ysd[ysd.length - 1])
             var img = cds.data['image'][0]
             var xs = cds.data['x_scale'][0]
-            // console.log('xs=', xs)
+            //console.log('xs=', xs)
             var ys = cds.data['y_scale'][0]
-            // console.log('ys=', ys)
+            //console.log('ys=', ys)
             var xi = Math.floor(Math.abs(hx - xs[0]) / xs[2])
             var yi = Math.floor(Math.abs(hy - ys[0]) / ys[2])
-            // console.log('xi,yi = %d,%d', xi, yi)
-            // console.log('xsd.len,ysd.len=%d,%d', xsd.length, ysd.length)
+            //console.log('xi,yi = %d,%d', xi, yi)
+            //console.log('xsd.len,ysd.len=%d,%d', xsd.length, ysd.length)
             if ((xi < xsd.length) && (yi < ysd.length)) {
                 cds.data['x_hover'][0] = xsd[xi]
                 cds.data['y_hover'][0] = ysd[yi]
                 cds.data['z_hover'][0] = img[Math.floor(xi + yi * xsd.length)]
-                // console.log('x,y,z=%f,%f,%f', cds.data['x_hover'][0], cds.data['y_hover'][0], cds.data['z_hover'][0])
-                // cds.trigger('change')
+                //console.log('x,y,z=%f,%f,%f', cds.data['x_hover'][0], cds.data['y_hover'][0], cds.data['z_hover'][0])
+                cds.change.emit()
             }
         """)
-
+                
     def __setup_toolbar(self, figure):
         hrd = [self._rrd]
         hcb = self.__hover_callback()
@@ -1444,7 +1444,7 @@ class ImageChannel(Channel):
                 self._animate_msg_label()
             else:
                 self._hide_msg_label()
-            image_shape_changed = self.__image_shape_changed(sd.buffer.shape)
+            image_shape_changed = sd.has_failed or self.__image_shape_changed(sd.buffer.shape)
             self._current_image_shape = sd.buffer.shape if not empty_buffer else nan_buffer.shape
             if not empty_buffer:
                 self.__setup_undefined_scales(sd.buffer.shape)
@@ -1493,7 +1493,6 @@ class ImageChannel(Channel):
                 yss = -1.
                 yse =  1.
             if image_shape_changed:
-                #print('image shape changed...')
                 self._mdl.x_range.update(start=xss, end=xse)
                 self._mdl.y_range.update(start=yss, end=yse)
                 self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
@@ -1511,13 +1510,14 @@ class ImageChannel(Channel):
                 image = nan_buffer
             new_data = dict()
             new_data['image'] = [image]
-            new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
-            new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
-            new_data['x_scale'] = [[xss, xse, xst, w]]
-            new_data['y_scale'] = [[yss, yse, yst, h]]
-            new_data['x_hover'] = [self._cds.data['x_hover'][0]]
-            new_data['y_hover'] = [self._cds.data['y_hover'][0]]
-            new_data['z_hover'] = [self._cds.data['z_hover'][0]]
+            if image_shape_changed:
+                new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
+                new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
+                new_data['x_scale'] = [[xss, xse, xst, w]]
+                new_data['y_scale'] = [[yss, yse, yst, h]]
+                #new_data['x_hover'] = [self._cds.data['x_hover'][0]]
+                #new_data['y_hover'] = [self._cds.data['y_hover'][0]]
+                #new_data['z_hover'] = [self._cds.data['z_hover'][0]]
             self._cds.data.update(new_data)
         except Exception as e:
             print(e)
@@ -1562,12 +1562,10 @@ class GenericChannel(Channel):
             sd = ds.pull_data()
             previous_bad_source_cnt = self._bad_source_cnt
             if sd.has_failed:
-                #print("emitting error...")
                 self._bad_source_cnt = 1
                 self.emit_error(sd)
                 return
             elif previous_bad_source_cnt:
-                #print("emitting recover...")
                 self._bad_source_cnt = 0
                 self.emit_recover()
             self.model_properties['uid'] = self.uid
@@ -2079,12 +2077,12 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
     def l11a(width='auto', *args, **kwargs):
         return widgets.Layout(flex='1 1 auto', width=width, *args, **kwargs)
 
-    def __setup_update_period_slider(self):
+    def __setup_update_period_slider(self, **kwargs):
         return widgets.FloatSlider(
             value=self.data_streamer.update_period,
-            min=0.25,
-            max=5.0,
-            step=0.25,
+            min=kwargs.get('min_refresh_period', 0.25),
+            max=kwargs.get('max_refresh_period', 5.0),
+            step=kwargs.get('step_refresh_period', 0.25),
             description='Refresh Period (s)',
             disabled=False,
             continuous_update=False,
@@ -2098,7 +2096,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._error_layout = None
         self._up_slider = None
         if kwargs.get('up_slider_enabled', True):
-            self._up_slider = self.__setup_update_period_slider()
+            self._up_slider = self.__setup_update_period_slider(**kwargs)
             self._up_slider.observe(self.__on_refresh_period_changed, names='value')
         else:
             self._up_slider = None
