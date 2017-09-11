@@ -7,6 +7,7 @@ import six
 
 import ipywidgets as widgets
 
+import math as mt
 import numpy as np
 
 from bokeh.layouts import row, column, layout, gridplot
@@ -26,6 +27,8 @@ import bokeh.events
 
 from tools import *
 from session import BokehSession
+
+from skimage.transform import rescale
 
 module_logger_name = "fs.client.jupyter.plots"
 
@@ -301,6 +304,8 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
     def __init__(self, name, data_sources=None, model_properties=None):
         NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
         DataStreamEventHandler.__init__(self, name)
+        # associated bokeh session
+        self._session = None
         # data sources
         self._bad_source_cnt = 0
         self._data_sources = Children(self, DataSource)
@@ -371,6 +376,17 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
                 self.error(e)
 
     @property
+    def bokeh_session(self):
+        """returns the dict of model properties"""
+        return self._session
+
+    @bokeh_session.setter
+    def bokeh_session(self, bks):
+        """bokeh_session"""
+        assert(isinstance(bks, BokehSession))
+        self._session = bks
+
+    @property
     def model_properties(self):
         """returns the dict of model properties"""
         return self._model_props
@@ -433,429 +449,6 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
     def update(self):
         """gives the Channel a chance to update itself"""
         pass
-
-
-# ------------------------------------------------------------------------------
-class DataStream(NotebookCellContent, DataStreamEventHandler):
-    """data stream interface"""
-
-    def __init__(self, name, channels=None):
-        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
-        DataStreamEventHandler.__init__(self, name)
-        # channels
-        self._channels = Children(self, Channel)
-        self._channels.register_add_callback(self._on_add_channel)
-        self.add(channels)
-
-    @NotebookCellContent.context.setter
-    def context(self, new_context):
-        """overwrites NotebookCellContent.context.setter"""
-        assert (isinstance(new_context, CellContext))
-        self._context = new_context
-        for channel in self._channels.values():
-            channel.context = new_context
-
-    def add(self, channels):
-        """add the specified channels"""
-        self._channels.add(channels)
-
-    def _on_add_channel(self, channel):
-        """called when a new channel is added to the data stream"""
-        channel.context = self.context
-        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
-        channel.register_event_handler(self, events)
-
-    def handle_stream_event(self, event):
-        assert (isinstance(event, DataStreamEvent))
-        pass
-
-    def get_models(self):
-        """returns the Bokeh model (figure, layout, ...)s associated with the DataStream"""
-        return [channel.get_model() for channel in self._channels.values()]
-
-    def setup_models(self):
-        """returns the Bokeh model (figure, layout, ...)s associated with the DataStream"""
-        models = list()
-        for channel in self._channels.values():
-            model = channel.setup_model()
-            if channel.show_title and channel.title is not None:
-                div_txt = "<b>{}</b>".format(channel.title)
-                models.append(Div(text=div_txt))
-            if model:
-                models.append(model)
-        return models
-
-    def update(self):
-        """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
-        #print("data stream: {} update".format(self.name))
-        for channel in self._channels.values():
-            try:
-                channel.update()
-            except Exception as e:
-                self.error(e)
-
-    def cleanup(self):
-        """asks each Channel to cleanup itself (e.g. release resources)"""
-        for channel in self._channels.values():
-            try:
-                self.info("DataStream: cleaning up Channel {}".format(channel.name))
-                channel.cleanup()
-            except Exception as e:
-                self.error(e)
-
-
-# ------------------------------------------------------------------------------
-class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
-    """a data stream manager embedded a bokeh server"""
-
-    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0.):
-        # route output to current cell
-        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
-        DataStreamEventHandler.__init__(self, name)
-        BokehSession.__init__(self)
-        # a FIFO to store incoming DataStreamEvent
-        self._events = deque()
-        # update period in seconds
-        self.callback_period = update_period
-        # the data streams
-        self._data_streams = list()
-        self.add(data_streams)
-        # auto start
-        self._auto_start = auto_start
-        # start delay
-        self._start_delay = start_delay
-        # open the session
-        self.open()
-
-    @NotebookCellContent.context.setter
-    def context(self, new_context):
-        """overwrites NotebookCellContent.context.setter"""
-        assert (isinstance(new_context, CellContext))
-        self._context = new_context
-        for ds in self._data_streams:
-            ds.context = new_context
-
-    def add(self, ds):
-        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
-        if isinstance(ds, DataStream):
-            ds.context = self.context
-            ds.register_event_handler(self, events)
-            self._data_streams.append(ds)
-        elif isinstance(ds, (list, tuple)):
-            for s in ds:
-                if not isinstance(s, DataStream):
-                    raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
-                s.context = self.context
-                s.register_event_handler(self, events)
-                self._data_streams.append(s)
-        else:
-            raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
-
-    @tracer
-    def open(self):
-        """open the session and optionally start it """
-        super(DataStreamer, self).open()
-
-    @tracer
-    def close(self):
-        """close the session"""
-        # suspend periodic callback 
-        self.pause()
-        # the underlying actions will be performed under critical section
-        self.safe_document_modifications(self.__close)
-
-    @tracer
-    def __close(self):
-        """close/cleanup everything"""
-        # cleanup each data stream
-        for ds in self._data_streams:
-            try:
-                self.debug("DataStreamer: cleaning up DataStream {}".format(ds.name))
-                ds.cleanup()
-            except Exception as e:
-                self.error(e)
-        self.debug("DataStreamer: closing Bokeh session...")
-        # delegate the remaining actions to our super class (this is mandatory)
-        try:
-            super(DataStreamer, self).close()
-        except Exception as e:
-            self.error(e)
-        self.debug("DataStreamer: Bokeh session closed")
-
-    @tracer
-    def start(self, delay=0.):
-        """start periodic activity"""
-        if not self.ready:
-            self.debug("DataStreamer.start:session not ready:set auto_start to True")
-            self._auto_start = True
-        else:
-            actual_tmo = delay if delay > 0. else self._start_delay
-            if actual_tmo > 0.:
-                print('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
-                self._start_delay = 0.
-                self.timeout_callback(self.start, actual_tmo)
-            else:
-                self.debug("DataStreamer.start: session ready, no delay, resuming...")
-                self.resume()
-
-    @tracer
-    def stop(self):
-        """stop periodic activity"""
-        if not self.ready:
-            self._auto_start = False
-        else:
-            self.pause()
-
-    @tracer
-    def setup_document(self):
-        """add the data stream models to the bokeh document"""
-        try:
-            models = list()
-            for ds in self._data_streams:
-                try:
-                    models.extend(ds.setup_models())
-                except Exception as e:
-                    self.error(e)
-            try:
-                self.periodic_callback()
-            except:
-                pass
-            try:
-                for model in models:
-                    self.document.add_root(model, setter=self.id)
-            except Exception as e:
-                self.error(e)
-            if self._auto_start:
-                self.start(self._start_delay)
-        except Exception as e:
-            self.error(e)
-            raise
-
-    def handle_stream_event(self, event):
-        assert (isinstance(event, DataStreamEvent))
-        if event.type == DataStreamEvent.Type.MODEL_CHANGED:
-            self._events.appendleft(event) 
-            self.safe_document_modifications(self.__on_model_changed)
-
-    def __on_model_changed(self):
-        event = self._events.pop() 
-        if event.emitter and event.data:
-            self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
-            if len(self.document.roots):
-                for root in self.document.roots:
-                    if root.name == str(event.emitter):
-                        self.debug("removing figure {}".format(root.name))
-                        self.document.remove_root(root)
-            try:
-                self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
-                self.document.add_root(event.data, setter=self.id)
-            except Exception as e:
-                self.error(e)
-            self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
-
-    @property
-    def update_period(self):
-        """returns the update period (in seconds)"""
-        return self.callback_period
-
-    @update_period.setter
-    def update_period(self, up):
-        """set the update period (in seconds)"""
-        self.update_callback_period(up)
-
-    def periodic_callback(self):
-        """the session periodic callback"""
-        for ds in self._data_streams:
-            try:
-                ds.update()
-            except Exception as e:
-                self.error(e)
-
-
-# ------------------------------------------------------------------------------
-class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
-    """a DataStreamer controller"""
-
-    def __init__(self, name, data_streamer=None, **kwargs):
-        # check input parameters
-        assert (isinstance(data_streamer, DataStreamer))
-        # route output to current cell
-        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
-        DataStreamEventHandler.__init__(self, name)
-        # data streamer
-        self.data_streamer = data_streamer
-        # start/stop/close button
-        self.__setup_controls(**kwargs)
-        # function called when the close button is clicked
-        self._close_callbacks = list()
-        # auto-start
-        self.__auto_start(kwargs.get('auto_start', True))
-
-    def __auto_start(self, auto_start):
-        self._running = False
-        if auto_start:
-            self.__on_freeze_unfreeze_clicked()
-
-    @staticmethod
-    def l01a(width='auto', *args, **kwargs):
-        return widgets.Layout(flex='0 1 auto', width=width, *args, **kwargs)
-
-    @staticmethod
-    def l11a(width='auto', *args, **kwargs):
-        return widgets.Layout(flex='1 1 auto', width=width, *args, **kwargs)
-
-    def __setup_update_period_slider(self):
-        return widgets.FloatSlider(
-            value=self.data_streamer.update_period,
-            min=0.25,
-            max=5.0,
-            step=0.25,
-            description='Refresh Period (s)',
-            disabled=False,
-            continuous_update=False,
-            orientation='horizontal',
-            readout=True,
-            readout_format='.2f',
-        )
-
-    def __setup_controls(self, **kwargs):
-        self._error_area = None
-        self._error_layout = None
-        self._up_slider = None
-        if kwargs.get('up_slider_enabled', True):
-            self._up_slider = self.__setup_update_period_slider()
-            self._up_slider.observe(self.__on_refresh_period_changed, names='value')
-        else:
-            self._up_slider = None
-        bd = "Freeze" if kwargs.get('auto_start', True) else "Unfreeze"
-        self._freeze_unfreeze_button = widgets.Button(description=bd, layout=self.l01a(width="100px"))
-        self._freeze_unfreeze_button.on_click(self.__on_freeze_unfreeze_clicked)
-        self._close_button = widgets.Button(description="Close",layout=self.l01a(width="100px"))
-        self._close_button.on_click(self.__on_close_clicked)
-        self._switch_buttons_to_valid_state()
-        wigets_list = list()
-        if self._up_slider:
-            wigets_list.append(self._up_slider)
-        wigets_list.extend([self._freeze_unfreeze_button, self._close_button])
-        self._controls = widgets.HBox(wigets_list, layout=self.l01a())
-        display(self._controls)
-
-    def __on_refresh_period_changed(self, event):
-        try:
-            self.data_streamer.update_period = event['new']
-        except Exception as e:
-            self.error(e)
-
-    def __on_freeze_unfreeze_clicked(self, b=None):
-        if self._running:
-            self._data_streamer.stop()
-            self._freeze_unfreeze_button.description = "Unfreeze"
-        else:
-            self._data_streamer.start()
-            self._freeze_unfreeze_button.description = "Freeze"
-        self._running = not self._running
-        if self._running and self._up_slider is not None:
-            self._up_slider.value = self.data_streamer.update_period
-
-    def __on_close_clicked(self, b=None):
-        self.close()
-
-    def start(self):
-        try:
-            self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
-            self._data_streamer.start()
-        except Exception as e:
-            self.error(e)
-
-    def close(self):
-        try:
-            self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
-            self._data_streamer.close()
-        except Exception as e:
-            self.error(e)
-        self._controls.close()
-        if self._error_area:
-            self._error_area.close()
-        self.clear_output()
-        self.__call_close_callbacks()
-
-    def register_close_callback(self, cb):
-        assert(hasattr(cb, '__call__'))
-        self._close_callbacks.append(cb)
-
-    def __call_close_callbacks(self):
-        for cb in self._close_callbacks:
-            try:
-                cb()
-            except:
-                pass
-
-    def handle_stream_event(self, event):
-        assert(isinstance(event, DataStreamEvent))
-        if event.type == DataStreamEvent.Type.ERROR:
-            self.__on_stream_error(event)
-        elif event.type == DataStreamEvent.Type.RECOVER:
-            self.__on_stream_recover(event)
-        elif event.type == DataStreamEvent.Type.EOS:
-            self.__on_end_of_stream(event)
-
-    def __on_stream_error(self, event):
-        self._switch_buttons_to_invalid_state()
-        self._show_error(event.error)
-
-    def __on_stream_recover(self, event):
-        self._switch_buttons_to_valid_state()
-        self._hide_error()
-
-    def __on_end_of_stream(self, event):
-        self.__on_freeze_unfreeze_clicked()
-
-    def _switch_buttons_to_valid_state(self):
-        self._close_button.style.button_color = '#00FF00'
-        self._freeze_unfreeze_button.style.button_color = '#00FF00'
-
-    def _switch_buttons_to_invalid_state(self):
-        self._close_button.style.button_color = '#FF0000'
-        self._freeze_unfreeze_button.style.button_color = '#FF0000'
-
-    def _show_error(self, err_desc):
-        try:
-            with cell_context(self.context):
-                err = "Oops, the following error occurred:\n"
-                err += err_desc
-                if not self._error_area:
-                    self._error_area = widgets.Textarea(value=err, layout=self.l11a())
-                    self._error_area.rows = 3
-                    self.display(self._error_area)
-                else:
-                    self._error_area.value = err
-        except Exception as e:
-            print(e)
-            raise
-
-    def _hide_error(self):
-        try:
-            self._error_area.close()
-        except:
-            pass
-        finally:
-            self._error_area = None
-
-    @property
-    def data_streamer(self):
-        return self._data_streamer
-
-    @data_streamer.setter
-    def data_streamer(self, ds):
-        # check input parameter
-        assert (isinstance(ds, DataStreamer))
-        # data streamer
-        self._data_streamer = ds
-        # route data streamer output to current cell
-        self._data_streamer.context = self.context
-        # register event handler
-        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
-        self._data_streamer.register_event_handler(self, events)
 
 
 # ------------------------------------------------------------------------------
@@ -999,6 +592,42 @@ class BoxSelectionManager(NotebookCellContent):
 
 
 # ------------------------------------------------------------------------------
+class InteractionsManager(object):
+    
+    def __init__(self, bks):
+        self._session = None
+        self._callback = None
+        self._range_change_notified = False
+        
+    def setup(self, session, figure, callback):
+        assert(isinstance(session, BokehSession))
+        self._session = session
+        self._callback = callback
+        figure.x_range.on_change('start', self.__on_range_change)
+        figure.x_range.on_change('end', self.__on_range_change)
+        figure.y_range.on_change('start', self.__on_range_change)
+        figure.y_range.on_change('end', self.__on_range_change)
+        
+    def __on_range_change(self, attr, old, new):
+        if not self._range_change_notified and self._callback:
+            self._range_change_notified = True
+            try:
+                # -----------------------------------------------------------------------------
+                # InteractionsManager.__on_range_change is called with 'document' locked
+                # we consequently have to call the owner's handler asynchrounously so that 
+                # it will be able to update the plot
+                # -----------------------------------------------------------------------------
+                # nb: this a tmp impl - we are waiting for the bokeh events to improve a bit...
+                # -----------------------------------------------------------------------------
+                self._session.timeout_callback(self._callback, 0.25)
+            except Exception as e:
+                print(e)
+
+    def range_change_handled(self):
+        self._range_change_notified = False
+
+
+# ------------------------------------------------------------------------------
 ScaleType = enum(
     'INDEXES',
     'RANGE',
@@ -1023,6 +652,9 @@ class Scale(object):
         else:
             self._type = ScaleType.RANGE
         self._array, self._step = self.__compute_linear_space()
+        # the following will be used for linear interpolation (point coords -> pixel index) 
+        self._ix = self._array
+        self._iy = np.linspace(0, self._array.shape[0] - 1, num=self._array.shape[0], dtype=int)
 
     @property
     def type(self):
@@ -1103,6 +735,11 @@ class Scale(object):
     @property
     def bokeh_range(self):
         return Range1d(self._start, self._end) if self.__validate_range() else Range1d(-1, 1)
+
+    def range_coords_to_indexes(self, start_p, end_p):
+        start_i = mt.floor(np.interp(start_p, self._ix, self._iy))
+        end_i = mt.ceil(np.interp(end_p, self._ix, self._iy)) + 1
+        return start_i, end_i
 
     def validate(self):
         if self._type != ScaleType.INDEXES:
@@ -1559,14 +1196,16 @@ class ImageChannel(Channel):
         self.__reinitialize()
 
     def __reinitialize(self):
+        self._ds = None # last data receive from the associated source
         self._img_shape = None # full image shape
         self._cur_row = 0 # current row index
-        self._cds = None  # column data source
-        self._mdl = None  # model
-        self._xsc = None  # x scale
-        self._ysc = None  # y scale
-        self._ird = None  # image renderer
-        self._rrd = None  # rect renderer for hover trick
+        self._cds = None # column data source
+        self._mdl = None # model
+        self._xsc = None # x scale
+        self._ysc = None # y scale
+        self._ird = None # image renderer
+        self._rrd = None # rect renderer for hover trick
+        self._itm = InteractionsManager() # an InteractionsManager
 
     def __instanciate_data_source(self):
         columns = dict()
@@ -1615,9 +1254,9 @@ class ImageChannel(Channel):
         hcb = self.__hover_callback()
         htt = [('x,y,z:', '@x_hover{0.00},@y_hover{0.00},@z_hover{0.00}')]
         hpp = 'follow_mouse'
-        figure.add_tools(PanTool())
+        #figure.add_tools(PanTool())
         figure.add_tools(BoxZoomTool())
-        figure.add_tools(WheelZoomTool())
+        #figure.add_tools(WheelZoomTool())
         figure.add_tools(BoxSelectTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
@@ -1664,16 +1303,6 @@ class ImageChannel(Channel):
             ikwargs['dw'] = 3
             ikwargs['dh'] = 3
             ikwargs['image'] = 'image'
-            ffs = props.get('full_frame_shape', None)
-            #print("full_frame_shape: {}".format(ffs))
-            if ffs is not None and isinstance(ffs, (tuple, list)) and len(ffs) >= 2 and all(ffs):
-                #print("reshaping image data...")
-                self._img_shape = tuple(ffs)
-                #print("image shape: {}".format(self._img_shape))
-                img_data = np.empty(self._img_shape)
-                img_data.fill(np.nan)
-                self._cds.data['image'] = [img_data]
-                #print("image reshaped!")
             ikwargs['source'] = self._cds
             ikwargs['color_mapper'] = LinearColorMapper(palette=props.get('palette', Plasma256))
             self._ird = f.image(**ikwargs)
@@ -1694,14 +1323,47 @@ class ImageChannel(Channel):
             bsm = props.get('selection_manager', None)
             if bsm:
                 bsm.register_figure(f)
+            self._itm.setup(self.bokeh_session, self._mdl, self._handle_range_change)
         except Exception as e:
             self.error(e)
         return self._mdl
 
-    def update(self):
+    def handle_range_change(self):
+        try:
+            if not self._ds or sd.has_failed or not sum(sd.buffer.shape):
+                return
+
+            xsc, xec = self._mdl.x_range.start, self._mdl.x_range.end
+            xx = np.linspace(xsc, xec, num=sd.buffer.shape[1], dtype=float)
+            xy = np.linspace(0, sd.buffer.shape[1] - 1, num=sd.buffer.shape[1], dtype=int)
+
+            ysc, yec = self._mdl.y_range.start, self._mdl.y_range.end
+            yx = np.linspace(ysc, yec, num=sd.buffer.shape[0], dtype=float)
+            yy = np.linspace(0, sd.buffer.shape[0] - 1, num=sd.buffer.shape[0], dtype=int)
+
+            xsi, xei = mt.floor(np.interp(xsc, xx, xy)), mt.ceil(np.interp(xec, xx, xy)) + 1
+            ysi, yei = mt.floor(np.interp(ysc, yx, yy)), mt.ceil(np.interp(yec, yx, yy)) + 1
+
+            image = sd.buffer[ysi:yei, xsi:xei]
+            num_pixels = image.shape[0] * image.shape[1]
+            need_rescale, rescaling_factor = self.compute_rescaling_factor(num_pixels)
+            if need_rescale:
+                image = self.rescale_image(image, rescaling_factor)
+                
+            self._cds.data.update(image=[image])
+            self._ird.glyph.update(x=xsc, 
+                                   y=self._plt.y_range.start, 
+                                   dw=abs(self._plt.x_range.end - self._plt.x_range.start), 
+                                   dh=abs(self._plt.y_range.end - self._plt.y_range.start))
+        finally:
+            self._itm.range_change_handled()
+
+    def update(self, update_image=True):
         """gives each Channel a chance to update itself (e.g. to update the ColumnDataSources)"""
         try:
-            ds = self.data_source
+            if update_image:
+                self._ds = self.data_source
+            ds = self._ds
             if ds is None:
                 return
             sd = ds.pull_data()
@@ -1714,7 +1376,7 @@ class ImageChannel(Channel):
                 #print("emitting recover...")
                 self._bad_source_cnt = 0
                 self.emit_recover()
-            empty_buffer = sd.has_failed or sum(sd.buffer.shape) == 0
+            empty_buffer = sd.has_failed or not sum(sd.buffer.shape)
             nan_buffer = None
             if empty_buffer:
                 nan_buffer = np.empty((2,2))
@@ -1770,32 +1432,18 @@ class ImageChannel(Channel):
             if not h:
                 yss = -1.
                 yse =  1.
+            if not empty_buffer:
+                image = sd.buffer
+                num_pixels = image.shape[0] * image.shape[1]
+                need_rescale, rescaling_factor = self.compute_rescaling_factor(num_pixels)
+                if need_rescale:
+                    image = self.rescale_image(image, rescaling_factor)
             self._mdl.x_range.update(start=xss, end=xse) 
             self._mdl.y_range.update(start=yss, end=yse)
             self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
             self._rrd.glyph.update(x=xss + w/2, y=yss + h/2, width=w, height=h)
-            new_data = dict()
-            if self._img_shape is None:
-                new_data['image'] = [sd.buffer] if not empty_buffer else [nan_buffer]
-            else:
-                if empty_buffer:
-                    #print("ImageChannel.update: nothing to do (empty_buffer)")
-                    return #TODO: should we change this?
-                #print("ImageChannel: update: current row is {}".format(self._cur_row))
-                #print("ImageChannel: update: incoming data shape {}".format(sd.buffer.shape))
-                if self._cur_row == sd.buffer.shape[0]:
-                    #print("ImageChannel.update: (row index didn't change)")
-                    return
-                row_index = self._cur_row if self._cur_row > 0 else None
-                s1, s2 = slice(row_index, sd.buffer.shape[0], 1), slice(None)
-                #print("ImageChannel: update: slices are {}:{}".format(s1,s2))
-                index = [0, s1, s2]
-                #print("ImageChannel: index is {}".format(index))
-                new_rows = sd.buffer[s1, s2].flatten()
-                #print("ImageChannel: new_rows are {}".format(new_rows))
-                self._cds.patch({'image': [(index, new_rows)]})
-                self._cur_row = sd.buffer.shape[0]
-                #print("ImageChannel: update: current row is now {}".format(self._cur_row))
+            new_data = dict()      
+            new_data['image'] = [image] if not empty_buffer else [nan_buffer]
             new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
             new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
             new_data['x_scale'] = [[xss, xse, xst, w]]
@@ -1806,6 +1454,23 @@ class ImageChannel(Channel):
             self._cds.data.update(new_data)
         except Exception as e:
             self.error(e)
+
+    def compute_rescaling_factor(self, image_size, image_size_threshold=100000):
+        rescaling_factor = 1.0
+        img_size = intial_img_size = image_size
+        if img_size <= image_size_threshold:
+            return False, rescaling_factor
+        for inc in [0.1, 0.01, 0.001, 0.0001]:
+            while img_size > image_size_threshold:
+                rescaling_factor -= inc
+                img_size = int(intial_img_size * rescaling_factor)
+            rescaling_factor += inc
+            img_size = int(intial_img_size * rescaling_factor)
+        rescaling_factor = mt.sqrt(rescaling_factor)
+        return True, rescaling_factor
+
+    def rescale_image(self, in_img, rescaling_factor):
+        return rescale(in_img, rescaling_factor, mode='constant', cval=np.nan)
 
     def cleanup(self):
         self.__reinitialize()
@@ -1899,11 +1564,19 @@ class LayoutChannel(Channel):
         self._channels.register_add_callback(self.__on_add_channel)
         self.add(channels)
 
+    @bokeh_session.context.setter
+    def bokeh_session(self, bks):
+        """overwrites Channel.bokeh_session.setter"""
+        assert (isinstance(bks, BokehSession))
+        super(LayoutChannel, self).bokeh_session = bks
+        for channel in self._channels.values():
+            channel.bokeh_session = bks
+
     @NotebookCellContent.context.setter
     def context(self, new_context):
         """overwrites NotebookCellContent.context.setter"""
         assert (isinstance(new_context, CellContext))
-        self._context = new_context
+        super(LayoutChannel, self).context = new_context
         for channel in self._channels.values():
             channel.context = new_context
 
@@ -2063,3 +1736,447 @@ class LayoutChannel(Channel):
         except Exception as e:
             self.error(e)
 
+
+# ------------------------------------------------------------------------------
+class DataStream(NotebookCellContent, DataStreamEventHandler):
+    """data stream interface"""
+
+    def __init__(self, name, channels=None):
+        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
+        DataStreamEventHandler.__init__(self, name)
+        # bokeh session
+        self._session = None
+        # channels
+        self._channels = Children(self, Channel)
+        self._channels.register_add_callback(self._on_add_channel)
+        self.add(channels)
+
+    @property
+    def bokeh_session(self):
+        """return the associated bokeh session"""
+        return self._session
+
+    @bokeh_session.setter
+    def bokeh_session(self, bks):
+        """set the associated bokeh session"""
+        assert (isinstance(bks, BokehSession))
+        self._session = bks
+        for channel in self._channels.values():
+            channel.bokeh_session = bks
+
+    @NotebookCellContent.context.setter
+    def context(self, new_context):
+        """overwrites NotebookCellContent.context.setter"""
+        assert (isinstance(new_context, CellContext))
+        self._context = new_context
+        for channel in self._channels.values():
+            channel.context = new_context
+
+    def add(self, channels):
+        """add the specified channels"""
+        self._channels.add(channels)
+
+    def _on_add_channel(self, channel):
+        """called when a new channel is added to the data stream"""
+        channel.context = self.context
+        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
+        channel.register_event_handler(self, events)
+
+    def handle_stream_event(self, event):
+        assert (isinstance(event, DataStreamEvent))
+        pass
+
+    def get_models(self):
+        """returns the Bokeh model (figure, layout, ...)s associated with the DataStream"""
+        return [channel.get_model() for channel in self._channels.values()]
+
+    def setup_models(self):
+        """returns the Bokeh model (figure, layout, ...)s associated with the DataStream"""
+        models = list()
+        for channel in self._channels.values():
+            model = channel.setup_model()
+            if channel.show_title and channel.title is not None:
+                div_txt = "<b>{}</b>".format(channel.title)
+                models.append(Div(text=div_txt))
+            if model:
+                models.append(model)
+        return models
+
+    def update(self):
+        """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
+        #print("data stream: {} update".format(self.name))
+        for channel in self._channels.values():
+            try:
+                channel.update()
+            except Exception as e:
+                self.error(e)
+
+    def cleanup(self):
+        """asks each Channel to cleanup itself (e.g. release resources)"""
+        for channel in self._channels.values():
+            try:
+                self.info("DataStream: cleaning up Channel {}".format(channel.name))
+                channel.cleanup()
+            except Exception as e:
+                self.error(e)
+
+
+# ------------------------------------------------------------------------------
+class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
+    """a data stream manager embedded a bokeh server"""
+
+    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0.):
+        # route output to current cell
+        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
+        DataStreamEventHandler.__init__(self, name)
+        BokehSession.__init__(self)
+        # a FIFO to store incoming DataStreamEvent
+        self._events = deque()
+        # update period in seconds
+        self.callback_period = update_period
+        # the data streams
+        self._data_streams = list()
+        self.add(data_streams)
+        # auto start
+        self._auto_start = auto_start
+        # start delay
+        self._start_delay = start_delay
+        # open the session
+        self.open()
+
+    @property
+    def bokeh_session(self):
+        """return the associated bokeh session"""
+        return self
+
+    @NotebookCellContent.context.setter
+    def context(self, new_context):
+        """overwrites NotebookCellContent.context.setter"""
+        assert (isinstance(new_context, CellContext))
+        self._context = new_context
+        for ds in self._data_streams:
+            ds.context = new_context
+
+    def add(self, ds):
+        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
+        if isinstance(ds, DataStream):
+            ds.bokeh_session = self
+            ds.context = self.context
+            ds.register_event_handler(self, events)
+            self._data_streams.append(ds)
+        elif isinstance(ds, (list, tuple)):
+            for s in ds:
+                if not isinstance(s, DataStream):
+                    raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
+                s.bokeh_session = self
+                s.context = self.context
+                s.register_event_handler(self, events)
+                self._data_streams.append(s)
+        else:
+            raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
+
+    @tracer
+    def open(self):
+        """open the session and optionally start it """
+        super(DataStreamer, self).open()
+
+    @tracer
+    def close(self):
+        """close the session"""
+        # suspend periodic callback 
+        self.pause()
+        # the underlying actions will be performed under critical section
+        self.safe_document_modifications(self.__close)
+
+    @tracer
+    def __close(self):
+        """close/cleanup everything"""
+        # cleanup each data stream
+        for ds in self._data_streams:
+            try:
+                self.debug("DataStreamer: cleaning up DataStream {}".format(ds.name))
+                ds.cleanup()
+            except Exception as e:
+                self.error(e)
+        self.debug("DataStreamer: closing Bokeh session...")
+        # delegate the remaining actions to our super class (this is mandatory)
+        try:
+            super(DataStreamer, self).close()
+        except Exception as e:
+            self.error(e)
+        self.debug("DataStreamer: Bokeh session closed")
+
+    @tracer
+    def start(self, delay=0.):
+        """start periodic activity"""
+        if not self.ready:
+            self.debug("DataStreamer.start:session not ready:set auto_start to True")
+            self._auto_start = True
+        else:
+            actual_tmo = delay if delay > 0. else self._start_delay
+            if actual_tmo > 0.:
+                print('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
+                self._start_delay = 0.
+                self.timeout_callback(self.start, actual_tmo)
+            else:
+                self.debug("DataStreamer.start: session ready, no delay, resuming...")
+                self.resume()
+
+    @tracer
+    def stop(self):
+        """stop periodic activity"""
+        if not self.ready:
+            self._auto_start = False
+        else:
+            self.pause()
+
+    @tracer
+    def setup_document(self):
+        """add the data stream models to the bokeh document"""
+        try:
+            models = list()
+            for ds in self._data_streams:
+                try:
+                    models.extend(ds.setup_models())
+                except Exception as e:
+                    self.error(e)
+            try:
+                self.periodic_callback()
+            except:
+                pass
+            try:
+                for model in models:
+                    self.document.add_root(model, setter=self.id)
+            except Exception as e:
+                self.error(e)
+            if self._auto_start:
+                self.start(self._start_delay)
+        except Exception as e:
+            self.error(e)
+            raise
+
+    def handle_stream_event(self, event):
+        assert (isinstance(event, DataStreamEvent))
+        if event.type == DataStreamEvent.Type.MODEL_CHANGED:
+            self._events.appendleft(event) 
+            self.safe_document_modifications(self.__on_model_changed)
+
+    def __on_model_changed(self):
+        event = self._events.pop() 
+        if event.emitter and event.data:
+            self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
+            if len(self.document.roots):
+                for root in self.document.roots:
+                    if root.name == str(event.emitter):
+                        self.debug("removing figure {}".format(root.name))
+                        self.document.remove_root(root)
+            try:
+                self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
+                self.document.add_root(event.data, setter=self.id)
+            except Exception as e:
+                self.error(e)
+            self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
+
+    @property
+    def update_period(self):
+        """returns the update period (in seconds)"""
+        return self.callback_period
+
+    @update_period.setter
+    def update_period(self, up):
+        """set the update period (in seconds)"""
+        self.update_callback_period(up)
+
+    def periodic_callback(self):
+        """the session periodic callback"""
+        for ds in self._data_streams:
+            try:
+                ds.update()
+            except Exception as e:
+                self.error(e)
+
+
+# ------------------------------------------------------------------------------
+class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
+    """a DataStreamer controller"""
+
+    def __init__(self, name, data_streamer=None, **kwargs):
+        # check input parameters
+        assert (isinstance(data_streamer, DataStreamer))
+        # route output to current cell
+        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
+        DataStreamEventHandler.__init__(self, name)
+        # data streamer
+        self.data_streamer = data_streamer
+        # start/stop/close button
+        self.__setup_controls(**kwargs)
+        # function called when the close button is clicked
+        self._close_callbacks = list()
+        # auto-start
+        self.__auto_start(kwargs.get('auto_start', True))
+
+    def __auto_start(self, auto_start):
+        self._running = False
+        if auto_start:
+            self.__on_freeze_unfreeze_clicked()
+
+    @staticmethod
+    def l01a(width='auto', *args, **kwargs):
+        return widgets.Layout(flex='0 1 auto', width=width, *args, **kwargs)
+
+    @staticmethod
+    def l11a(width='auto', *args, **kwargs):
+        return widgets.Layout(flex='1 1 auto', width=width, *args, **kwargs)
+
+    def __setup_update_period_slider(self):
+        return widgets.FloatSlider(
+            value=self.data_streamer.update_period,
+            min=0.25,
+            max=5.0,
+            step=0.25,
+            description='Refresh Period (s)',
+            disabled=False,
+            continuous_update=False,
+            orientation='horizontal',
+            readout=True,
+            readout_format='.2f',
+        )
+
+    def __setup_controls(self, **kwargs):
+        self._error_area = None
+        self._error_layout = None
+        self._up_slider = None
+        if kwargs.get('up_slider_enabled', True):
+            self._up_slider = self.__setup_update_period_slider()
+            self._up_slider.observe(self.__on_refresh_period_changed, names='value')
+        else:
+            self._up_slider = None
+        bd = "Freeze" if kwargs.get('auto_start', True) else "Unfreeze"
+        self._freeze_unfreeze_button = widgets.Button(description=bd, layout=self.l01a(width="100px"))
+        self._freeze_unfreeze_button.on_click(self.__on_freeze_unfreeze_clicked)
+        self._close_button = widgets.Button(description="Close",layout=self.l01a(width="100px"))
+        self._close_button.on_click(self.__on_close_clicked)
+        self._switch_buttons_to_valid_state()
+        wigets_list = list()
+        if self._up_slider:
+            wigets_list.append(self._up_slider)
+        wigets_list.extend([self._freeze_unfreeze_button, self._close_button])
+        self._controls = widgets.HBox(wigets_list, layout=self.l01a())
+        display(self._controls)
+
+    def __on_refresh_period_changed(self, event):
+        try:
+            self.data_streamer.update_period = event['new']
+        except Exception as e:
+            self.error(e)
+
+    def __on_freeze_unfreeze_clicked(self, b=None):
+        if self._running:
+            self._data_streamer.stop()
+            self._freeze_unfreeze_button.description = "Unfreeze"
+        else:
+            self._data_streamer.start()
+            self._freeze_unfreeze_button.description = "Freeze"
+        self._running = not self._running
+        if self._running and self._up_slider is not None:
+            self._up_slider.value = self.data_streamer.update_period
+
+    def __on_close_clicked(self, b=None):
+        self.close()
+
+    def start(self):
+        try:
+            self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
+            self._data_streamer.start()
+        except Exception as e:
+            self.error(e)
+
+    def close(self):
+        try:
+            self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
+            self._data_streamer.close()
+        except Exception as e:
+            self.error(e)
+        self._controls.close()
+        if self._error_area:
+            self._error_area.close()
+        self.clear_output()
+        self.__call_close_callbacks()
+
+    def register_close_callback(self, cb):
+        assert(hasattr(cb, '__call__'))
+        self._close_callbacks.append(cb)
+
+    def __call_close_callbacks(self):
+        for cb in self._close_callbacks:
+            try:
+                cb()
+            except:
+                pass
+
+    def handle_stream_event(self, event):
+        assert(isinstance(event, DataStreamEvent))
+        if event.type == DataStreamEvent.Type.ERROR:
+            self.__on_stream_error(event)
+        elif event.type == DataStreamEvent.Type.RECOVER:
+            self.__on_stream_recover(event)
+        elif event.type == DataStreamEvent.Type.EOS:
+            self.__on_end_of_stream(event)
+
+    def __on_stream_error(self, event):
+        self._switch_buttons_to_invalid_state()
+        self._show_error(event.error)
+
+    def __on_stream_recover(self, event):
+        self._switch_buttons_to_valid_state()
+        self._hide_error()
+
+    def __on_end_of_stream(self, event):
+        self.__on_freeze_unfreeze_clicked()
+
+    def _switch_buttons_to_valid_state(self):
+        self._close_button.style.button_color = '#00FF00'
+        self._freeze_unfreeze_button.style.button_color = '#00FF00'
+
+    def _switch_buttons_to_invalid_state(self):
+        self._close_button.style.button_color = '#FF0000'
+        self._freeze_unfreeze_button.style.button_color = '#FF0000'
+
+    def _show_error(self, err_desc):
+        try:
+            with cell_context(self.context):
+                err = "Oops, the following error occurred:\n"
+                err += err_desc
+                if not self._error_area:
+                    self._error_area = widgets.Textarea(value=err, layout=self.l11a())
+                    self._error_area.rows = 3
+                    self.display(self._error_area)
+                else:
+                    self._error_area.value = err
+        except Exception as e:
+            print(e)
+            raise
+
+    def _hide_error(self):
+        try:
+            self._error_area.close()
+        except:
+            pass
+        finally:
+            self._error_area = None
+
+    @property
+    def data_streamer(self):
+        return self._data_streamer
+
+    @data_streamer.setter
+    def data_streamer(self, ds):
+        # check input parameter
+        assert (isinstance(ds, DataStreamer))
+        # data streamer
+        self._data_streamer = ds
+        # route data streamer output to current cell
+        self._data_streamer.context = self.context
+        # register event handler
+        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
+        self._data_streamer.register_event_handler(self, events)
