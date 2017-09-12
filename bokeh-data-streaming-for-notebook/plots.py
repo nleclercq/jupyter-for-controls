@@ -512,7 +512,7 @@ class BoxSelectionManager(NotebookCellContent):
             bkh_figure.js_on_event(bokeh.events.Reset, self.__reset_callback())
             bkh_figure.on_event(bokeh.events.Reset, self.__print_event())
         except Exception as e:
-            #TODO: print(e)
+            print(e)
             pass
         rect = self.__selection_glyph()
         bkh_figure.add_glyph(self._selection_cds, glyph=rect, selection_glyph=rect, nonselection_glyph=rect)
@@ -603,12 +603,19 @@ class InteractionsManager(object):
         assert(isinstance(session, BokehSession))
         self._session = session
         self._callback = callback
+        #figure.on_event(bokeh.events.Reset, self.__on_reset)
         figure.x_range.on_change('start', self.__on_range_change)
         figure.x_range.on_change('end', self.__on_range_change)
         figure.y_range.on_change('start', self.__on_range_change)
         figure.y_range.on_change('end', self.__on_range_change)
         
+    def __on_reset(self, event):
+        self.__notify_range_change()
+        
     def __on_range_change(self, attr, old, new):
+        self.__notify_range_change()
+
+    def __notify_range_change(self):
         if not self._range_change_notified and self._callback:
             self._range_change_notified = True
             try:
@@ -622,7 +629,7 @@ class InteractionsManager(object):
                 self._session.timeout_callback(self._callback, 0.25)
             except Exception as e:
                 print(e)
-
+ 
     def range_change_handled(self):
         self._range_change_notified = False
 
@@ -1212,11 +1219,14 @@ class ImageChannel(Channel):
         data = np.empty((2, 2))
         data.fill(np.nan)
         columns['image'] = [data]
-        columns['image_width'] = [[0]]
-        columns['image_height'] = [[0]]
+        columns['image_width'] = [0]
+        columns['image_height'] = [0]
         columns['x_hover'] = [0]
         columns['y_hover'] = [0]
         columns['z_hover'] = [0]
+        columns['initial_x_range'] = [[-1, 1]]
+        columns['initial_y_range'] = [[-1, 1]]
+        columns['image_shape_changed'] = [0]
         return ColumnDataSource(data=columns)
 
     def __hover_callback(self):
@@ -1233,19 +1243,32 @@ class ImageChannel(Channel):
             var yst = Math.abs(plt.y_range.end - plt.y_range.start) / imh
             var pxi = Math.floor(Math.abs(pxc - plt.x_range.start) / xst)
             var pyi = Math.floor(Math.abs(pyc - plt.y_range.start) / yst)
-            //console.log(plt)
-            //console.log(xrg)
-            //console.log(yrg) 
-            //console.log('x-step = ', xst)
-            //console.log('y-step = ', yst)
-            //console.log('img.dims = (%d,%d)', imw, imh)
-            //console.log('pt(xc,yc) = (%f,%f)', pxc, pyc)
-            //console.log('pt(xi,yi) = (%d,%d)', pxi, pyi)
+            console.log(xrg)
+            console.log(yrg) 
+            var isc = cds.data['image_shape_changed'][0]
+            if (isc != 0) {
+                var ixrg = cds.data['initial_x_range'][0]
+                //console.log(ixrg) 
+                xrg._initial_start = ixrg[0] 
+                xrg._initial_end = ixrg[1] 
+                var iyrg = cds.data['initial_y_range'][0]
+                //console.log(iyrg) 
+                yrg._initial_start = iyrg[0] 
+                yrg._initial_end = iyrg[1] 
+            }
+            console.log('x-step = ', xst)
+            console.log('y-step = ', yst)
+            console.log('img.dims = (%d, %d)', imw, imh)
+            console.log('flatten img. dims. = %d', imw * imh)
+            console.log('flatten img. len. = %d', img.length)
+            console.log('pt(xc,yc) = (%f, %f)', pxc, pyc)
+            console.log('pt(xi,yi) = (%d, %d)', pxi, pyi)
             if ((pxi < imw) && (pyi < imh)) {
                 cds.data['x_hover'][0] = pxc
                 cds.data['y_hover'][0] = pyc
                 cds.data['z_hover'][0] = img[Math.floor(pxi + pyi * imw)]
-                //console.log('x,y,z=%f,%f,%f', pxc, pxi, cds.data['z_hover'][0])
+                console.log('flatten img. idx = %f', pxi + pyi * imw)
+                console.log('x, y, z = %f, %f, %f', pxc, pxi, cds.data['z_hover'][0])
                 cds.change.emit()
             }
         """)
@@ -1358,7 +1381,11 @@ class ImageChannel(Channel):
             if not sd or sd.has_failed or not sum(sd.buffer.shape):
                 return
             image = self.__extract_image_for_current_ranges(sd.buffer)
-            self._cds.data.update(image=[image])
+            new_data = dict()
+            new_data['image'] = [image]
+            new_data['image_width'] = [image.shape[1]]
+            new_data['image_height'] = [image.shape[0]]
+            self._cds.data.update(new_data)
             self._ird.glyph.update(x=self._mdl.x_range.start,
                                    y=self._mdl.y_range.start,
                                    dw=abs(self._mdl.x_range.end - self._mdl.x_range.start),
@@ -1514,6 +1541,12 @@ class ImageChannel(Channel):
             new_data['image'] = [image]
             new_data['image_width'] = [image.shape[1]]
             new_data['image_height'] = [image.shape[0]]
+            if image_shape_changed:
+                new_data['image_shape_changed'] = [1]
+                new_data['initial_x_range'] = [[xss, xse]]
+                new_data['initial_y_range'] = [[yss, yse]]
+            else:
+                new_data['image_shape_changed'] = [0]
             self._cds.data.update(new_data)
         except Exception as e:
             print(e)
