@@ -1209,42 +1209,43 @@ class ImageChannel(Channel):
 
     def __instanciate_data_source(self):
         columns = dict()
-        columns['x_scale_data'] = [[0]]
-        columns['y_scale_data'] = [[0]]
-        columns['x_scale'] = [0]
-        columns['y_scale'] = [0]
-        columns['x_hover'] = [0]
-        columns['y_hover'] = [0]
-        columns['z_hover'] = [0]
         data = np.empty((2, 2))
         data.fill(np.nan)
         columns['image'] = [data]
+        columns['image_width'] = [[0]]
+        columns['image_height'] = [[0]]
+        columns['x_hover'] = [0]
+        columns['y_hover'] = [0]
+        columns['z_hover'] = [0]
         return ColumnDataSource(data=columns)
 
     def __hover_callback(self):
         return CustomJS(args=dict(cds=self._cds), code="""
-            var geom = cb_data['geometry']
-            var hx = geom.x
-            var hy = geom.y
-            //console.log('hx,hy = %f,%f', hx, hy)
-            var xsd = cds.data['x_scale_data'][0]
-            //console.log('xs-start,xs-end = %f,%f', xsd[0], xsd[xsd.length - 1])
-            var ysd = cds.data['y_scale_data'][0]
-            //console.log('ys-start,ys-end = %f,%f', ysd[0], ysd[ysd.length - 1])
+            var pxc = cb_data['geometry'].x
+            var pyc = cb_data['geometry'].y
+            var plt = cb_obj.document._all_models[cds.tags[0]]
+            var xrg = plt.x_range
+            var yrg = plt.y_range
             var img = cds.data['image'][0]
-            var xs = cds.data['x_scale'][0]
-            //console.log('xs=', xs)
-            var ys = cds.data['y_scale'][0]
-            //console.log('ys=', ys)
-            var xi = Math.floor(Math.abs(hx - xs[0]) / xs[2])
-            var yi = Math.floor(Math.abs(hy - ys[0]) / ys[2])
-            //console.log('xi,yi = %d,%d', xi, yi)
-            //console.log('xsd.len,ysd.len=%d,%d', xsd.length, ysd.length)
-            if ((xi < xsd.length) && (yi < ysd.length)) {
-                cds.data['x_hover'][0] = xsd[xi]
-                cds.data['y_hover'][0] = ysd[yi]
-                cds.data['z_hover'][0] = img[Math.floor(xi + yi * xsd.length)]
-                //console.log('x,y,z=%f,%f,%f', cds.data['x_hover'][0], cds.data['y_hover'][0], cds.data['z_hover'][0])
+            var imw = cds.data['image_width'][0]
+            var imh = cds.data['image_height'][0]
+            var xst = Math.abs(plt.x_range.end - plt.x_range.start) / imw
+            var yst = Math.abs(plt.y_range.end - plt.y_range.start) / imh
+            var pxi = Math.floor(Math.abs(pxc - plt.x_range.start) / xst)
+            var pyi = Math.floor(Math.abs(pyc - plt.y_range.start) / yst)
+            //console.log(plt)
+            //console.log(xrg)
+            //console.log(yrg) 
+            //console.log('x-step = ', xst)
+            //console.log('y-step = ', yst)
+            //console.log('img.dims = (%d,%d)', imw, imh)
+            //console.log('pt(xc,yc) = (%f,%f)', pxc, pyc)
+            //console.log('pt(xi,yi) = (%d,%d)', pxi, pyi)
+            if ((pxi < imw) && (pyi < imh)) {
+                cds.data['x_hover'][0] = pxc
+                cds.data['y_hover'][0] = pyc
+                cds.data['z_hover'][0] = img[Math.floor(pxi + pyi * imw)]
+                //console.log('x,y,z=%f,%f,%f', pxc, pxi, cds.data['z_hover'][0])
                 cds.change.emit()
             }
         """)
@@ -1294,6 +1295,7 @@ class ImageChannel(Channel):
             fkwargs['toolbar_location'] = 'right' if fkwargs['height'] >= fkwargs['width'] else 'above'
             fkwargs['tools'] = ""
             f = figure(**fkwargs)
+            self._cds.tags = [f.ref['id']]
             f.xaxis.axis_label = None if not self._xsc else self._xsc.axis_label()
             f.yaxis.axis_label = None if not self._ysc else self._ysc.axis_label()
             layout = kwargs.get('layout', 'column')
@@ -1510,14 +1512,8 @@ class ImageChannel(Channel):
                 image = nan_buffer
             new_data = dict()
             new_data['image'] = [image]
-            if image_shape_changed:
-                new_data['x_scale_data'] = [np.linspace(xss, xse, xpn)]
-                new_data['y_scale_data'] = [np.linspace(yss, yse, ypn)]
-                new_data['x_scale'] = [[xss, xse, xst, w]]
-                new_data['y_scale'] = [[yss, yse, yst, h]]
-                #new_data['x_hover'] = [self._cds.data['x_hover'][0]]
-                #new_data['y_hover'] = [self._cds.data['y_hover'][0]]
-                #new_data['z_hover'] = [self._cds.data['z_hover'][0]]
+            new_data['image_width'] = [image.shape[1]]
+            new_data['image_height'] = [image.shape[0]]
             self._cds.data.update(new_data)
         except Exception as e:
             print(e)
