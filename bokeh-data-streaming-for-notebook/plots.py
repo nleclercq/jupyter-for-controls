@@ -544,7 +544,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['width'][0] = width
             cds.data['height'][0] = height
             cds.change.emit()
-            var imp = "from plots import BoxSelectionManager;"
+            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
             var pfx = "BoxSelectionManager.repository[".concat(cds.tags[0], "].on_selection_change(")
             var arg = JSON.stringify({'x0':[x0], 'y0':[y0], 'width':[width], 'height':[height]})
             var sfx = ")"
@@ -561,7 +561,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['width'][0] = 0
             cds.data['height'][0] = 0
             cds.change.emit()
-            var imp = "from plots import BoxSelectionManager;"
+            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
             var rst = "BoxSelectionManager.repository[".concat(cds.tags[0],"].on_selection_reset()")
             var cmd  = imp.concat(rst)
             console.log(cmd)
@@ -1213,6 +1213,7 @@ class ImageChannel(Channel):
         self._itm = InteractionsManager() # an InteractionsManager
         self._expected_image_shape = None
         self._current_image_shape = None
+        self._images_size_threshold = 100000
 
     def __instanciate_data_source(self):
         columns = dict()
@@ -1243,34 +1244,37 @@ class ImageChannel(Channel):
             var yst = Math.abs(plt.y_range.end - plt.y_range.start) / imh
             var pxi = Math.floor(Math.abs(pxc - plt.x_range.start) / xst)
             var pyi = Math.floor(Math.abs(pyc - plt.y_range.start) / yst)
-            console.log(xrg)
-            console.log(yrg) 
             var isc = cds.data['image_shape_changed'][0]
             if (isc != 0) {
                 var ixrg = cds.data['initial_x_range'][0]
-                //console.log(ixrg) 
-                xrg._initial_start = ixrg[0] 
-                xrg._initial_end = ixrg[1] 
+                //console.log(ixrg)
+                xrg._initial_start = ixrg[0]
+                xrg._initial_end = ixrg[1]
                 var iyrg = cds.data['initial_y_range'][0]
-                //console.log(iyrg) 
-                yrg._initial_start = iyrg[0] 
-                yrg._initial_end = iyrg[1] 
+                //console.log(iyrg)
+                yrg._initial_start = iyrg[0]
+                yrg._initial_end = iyrg[1]
             }
-            console.log('x-step = ', xst)
-            console.log('y-step = ', yst)
-            console.log('img.dims = (%d, %d)', imw, imh)
-            console.log('flatten img. dims. = %d', imw * imh)
-            console.log('flatten img. len. = %d', img.length)
-            console.log('pt(xc,yc) = (%f, %f)', pxc, pyc)
-            console.log('pt(xi,yi) = (%d, %d)', pxi, pyi)
-            if ((pxi < imw) && (pyi < imh)) {
-                cds.data['x_hover'][0] = pxc
-                cds.data['y_hover'][0] = pyc
+            var flatten_pti = pxi + pyi * imw
+            var flatten_array_len = pxi + pyi * imw
+            //console.log(xrg)
+            //console.log(yrg)
+            //console.log('x-step = ', xst)
+            //console.log('y-step = ', yst)
+            //console.log('img.dims = (%d, %d)', imw, imh)
+            //console.log('flatten img. dims. = %d', imw * imh)
+            //console.log('flatten img. len = %d', img.length)
+            //console.log('flatten point index = %d', flatten_pti)
+            cds.data['x_hover'][0] = pxc
+            cds.data['y_hover'][0] = pyc
+            if (flatten_pti < img.length) {
                 cds.data['z_hover'][0] = img[Math.floor(pxi + pyi * imw)]
-                console.log('flatten img. idx = %f', pxi + pyi * imw)
-                console.log('x, y, z = %f, %f, %f', pxc, pxi, cds.data['z_hover'][0])
-                cds.change.emit()
             }
+            else {
+                cds.data['z_hover'][0] = NaN
+            }
+            //console.log('x, y, z = %f, %f, %f', pxc, pxi, cds.data['z_hover'][0])
+            cds.change.emit()
         """)
                 
     def __setup_toolbar(self, figure):
@@ -1306,7 +1310,10 @@ class ImageChannel(Channel):
             self._xsc.validate()
             self._ysc = props.get('y_scale', Scale())
             self._ysc.validate()
-            self._expected_image_shape = self.model_properties.get('full_frame_shape', None)
+            self._images_size_threshold = self.model_properties.get('images_size_threshold', self._images_size_threshold)
+            #print('ImageChannel.setup_model.images_size_threshold: {:.00f}'.format(self._images_size_threshold))
+            self._expected_image_shape = self.model_properties.get('full_frame_shape', self._expected_image_shape)
+            #print('ImageChannel.setup_model.expected_image_shape: {}'.format(self._expected_image_shape))
             self.__setup_undefined_scales(self._expected_image_shape)
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
@@ -1423,16 +1430,16 @@ class ImageChannel(Channel):
             #print("extract_image_for_current_ranges.sub_image.rescaled to {}".format(image.shape))
         return image
 
-    def __compute_rescaling_factor(self, image, image_size_threshold=10000):
+    def __compute_rescaling_factor(self, image):
         try:
             rescaling_factor = 1.0
             initial_image_size = image_size = image.shape[0] * image.shape[1]
             #print("compute_rescaling_factor: size: {:.04f} - threshold: {:.04f}".format(image_size, image_size_threshold))
-            if image_size <= image_size_threshold:
+            if image_size <= self._images_size_threshold:
                 #print("compute_rescaling_factor: no rescaling required")
                 return False, rescaling_factor
             for inc in [0.1, 0.01, 0.001, 0.0001]:
-                while image_size > image_size_threshold:
+                while image_size > self._images_size_threshold:
                     rescaling_factor -= inc
                     image_size = int(initial_image_size * rescaling_factor)
                 rescaling_factor += inc
@@ -1524,6 +1531,7 @@ class ImageChannel(Channel):
             if image_shape_changed:
                 self._mdl.x_range.update(start=xss, end=xse)
                 self._mdl.y_range.update(start=yss, end=yse)
+
                 self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
                 self._rrd.glyph.update(x=xss + w / 2, y=yss + h / 2, width=w, height=h)
             else:
