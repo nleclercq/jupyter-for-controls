@@ -134,8 +134,10 @@ class BokehServer(object):
 
     __bkh_srv__ = None
     __srv_url__ = None
+    __server_lock__ = Lock()
 
     __sessions__ = deque()
+    __sessions_lock__ = Lock()
 
     __logger__ = logging.getLogger(module_logger_name)
     __logger__.setLevel(logging.ERROR)
@@ -162,7 +164,8 @@ class BokehServer(object):
         try:
             #TODO: should we lock BokehServer.__sessions__?
             BokehServer.__logger__.debug('BokehServer.__session_entry_point [doc:{}] <<'.format(id(doc)))
-            session = BokehServer.__sessions__.pop()
+            with BokehServer.__sessions_lock__:
+                session = BokehServer.__sessions__.pop()
             session._on_session_created(doc)
             BokehServer.__logger__.debug('BokehServer.__session_entry_point [doc:{}] >>'.format(id(doc)))
         except Exception as e:
@@ -172,11 +175,13 @@ class BokehServer(object):
     def open_session(new_session):
         BokehServer.__logger__.debug("BokehServer.open_session <<")
         assert(isinstance(new_session, BokehSession))
-        if not BokehServer.__bkh_srv__:
-            BokehServer.__logger__.debug("BokehServer.open_session.starting server")
-            BokehServer.__start_server()
-            BokehServer.__logger__.debug("BokehServer.open_session.server started")
-        BokehServer.__sessions__.appendleft(new_session)
+        with BokehServer.__server_lock__:
+            if not BokehServer.__bkh_srv__:
+                BokehServer.__logger__.debug("BokehServer.open_session.starting server")
+                BokehServer.__start_server()
+                BokehServer.__logger__.debug("BokehServer.open_session.server started")
+        with BokehServer.__sessions_lock__:
+            BokehServer.__sessions__.appendleft(new_session)
         BokehServer.__logger__.debug("BokehServer.open_session.autoload server - url is {}".format(BokehServer.__srv_url__))
         script = server_document(url=BokehServer.__srv_url__)
         html_display = HTML(script)
@@ -187,24 +192,26 @@ class BokehServer(object):
     def close_session(session):
         """totally experimental attempt to destroy a session from python!"""
         assert(isinstance(session, BokehSession))
-        session_id = session._doc.session_context.id
-        bkh_session = BokehServer.__bkh_srv__.get_session('/', session_id)
-        bkh_session.destroy()
-        session._on_session_destroyed()
+        with BokehServer.__server_lock__:
+            session_id = session._doc.session_context.id
+            bkh_session = BokehServer.__bkh_srv__.get_session('/', session_id)
+            bkh_session.destroy()
+            session._on_session_destroyed()
         
     @staticmethod
     def print_info(called_from_session_handler=False):
-        if not BokehServer.__bkh_srv__:
-            BokehServer.__logger__.debug("no Bokeh server running") 
-            return
-        try:
-            BokehServer.__logger__.debug("Bokeh server URL: {}".format(BokehServer.__srv_url__))
-            sessions = BokehServer.__bkh_srv__.get_sessions()
-            num_sessions = len(sessions)
-            if called_from_session_handler:
-                num_sessions += 1
-            BokehServer.__logger__.debug("Number of opened sessions: {}".format(num_sessions))
-        except Exception as e:
-            BokehServer.__logger__.error(e)
+        with BokehServer.__server_lock__:
+            if not BokehServer.__bkh_srv__:
+                BokehServer.__logger__.debug("no Bokeh server running")
+                return
+            try:
+                BokehServer.__logger__.debug("Bokeh server URL: {}".format(BokehServer.__srv_url__))
+                sessions = BokehServer.__bkh_srv__.get_sessions()
+                num_sessions = len(sessions)
+                if called_from_session_handler:
+                    num_sessions += 1
+                BokehServer.__logger__.debug("Number of opened sessions: {}".format(num_sessions))
+            except Exception as e:
+                BokehServer.__logger__.error(e)
 
 

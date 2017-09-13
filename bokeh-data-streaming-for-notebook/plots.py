@@ -1237,7 +1237,7 @@ class ImageChannel(Channel):
             var plt = cb_obj.document._all_models[cds.tags[0]]
             var xrg = plt.x_range
             var yrg = plt.y_range
-            var img = cds.data['image'][0] 
+            var img = cds.data['image'][0]
             var imw = cds.data['image_width'][0]
             var imh = cds.data['image_height'][0]
             var xst = Math.abs(plt.x_range.end - plt.x_range.start) / imw
@@ -1383,10 +1383,12 @@ class ImageChannel(Channel):
 
     def __handle_range_change(self):
         try:
-            #print("handle_range_change <<")
+            print("handle_range_change <<")
             sd = self._sd
             if not sd or sd.has_failed or not sum(sd.buffer.shape):
                 return
+            print("ImageChannel.{}:handle_range_change: x-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.x_range.start, self._mdl.x_range.end))
+            print("ImageChannel.{}:handle_range_change: y-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.y_range.start, self._mdl.y_range.end))
             image = self.__extract_image_for_current_ranges(sd.buffer)
             new_data = dict()
             new_data['image'] = [image]
@@ -1401,7 +1403,7 @@ class ImageChannel(Channel):
             print(e)
         finally:
             self._itm.range_change_handled()
-            #print("handle_range_change >>")
+            print("handle_range_change >>")
 
     def __image_shape_changed(self, image_shape):
         return self._current_image_shape != image_shape
@@ -1529,9 +1531,10 @@ class ImageChannel(Channel):
                 yss = -1.
                 yse =  1.
             if image_shape_changed:
+                print("ImageChannel.{}:changing x-range to ({:.04f}, {:.04f})".format(self.name, xss, xse))
+                print("ImageChannel.{}:changing y-range to ({:.04f}, {:.04f})".format(self.name, yss, yse))
                 self._mdl.x_range.update(start=xss, end=xse)
                 self._mdl.y_range.update(start=yss, end=yse)
-
                 self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
                 self._rrd.glyph.update(x=xss + w / 2, y=yss + h / 2, width=w, height=h)
             else:
@@ -2001,7 +2004,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         else:
             actual_tmo = delay if delay > 0. else self._start_delay
             if actual_tmo > 0.:
-                print('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
+                self.debug('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
                 self._start_delay = 0.
                 self.timeout_callback(self.start, actual_tmo)
             else:
