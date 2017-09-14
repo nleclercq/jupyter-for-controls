@@ -2035,7 +2035,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
                 pass
             try:
                 for model in models:
-                    self.document.add_root(model, setter=self.id)
+                    self.document.add_root(model, setter=self.bokeh_session_id)
             except Exception as e:
                 self.error(e)
             if self._auto_start:
