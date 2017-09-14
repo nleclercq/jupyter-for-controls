@@ -2061,7 +2061,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
                         self.document.remove_root(root)
             try:
                 self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
-                self.document.add_root(event.data, setter=self.id)
+                self.document.add_root(event.data, setter=self.bokeh_session_id)
             except Exception as e:
                 self.error(e)
             self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")

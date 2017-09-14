@@ -32,6 +32,9 @@ class BokehSessionHandler(Handler):
 
     def on_session_destroyed(self, session_context):
         pass
+    
+    def modify_document(self, doc):
+        return doc
 
 # ------------------------------------------------------------------------------
 class BokehSession(object):
@@ -144,7 +147,8 @@ class BokehSession(object):
             self._closed = True
             with BokehSession.__repo_lock__:
                 del BokehSession.__repo__[self._uuid]
-        
+            BokehSession.print_repository_status()
+            
     def setup_document(self):
         """give the session a chance to setup the freshy created bokeh document"""
         pass
@@ -213,11 +217,11 @@ class BokehSession(object):
     def print_repository_status():
         with BokehSession.__repo_lock__:
             if len(BokehSession.__repo__):
-                BokehSession.__logger__.info('BokehSession.repo. contains {} session(s):'.format(len(BokehSession.__repo__)))
+                BokehSession.__logger__.info('BokehSession.repository. contains {} session(s):'.format(len(BokehSession.__repo__)))
                 for s in BokehSession.__repo__.values():
                     BokehSession.__logger__.info('- {}'.format(s))
             else:
-                BokehSession.__logger__.info('BokehSession.repo is empty')
+                BokehSession.__logger__.info('BokehSession.repository is empty')
 
          
 # ------------------------------------------------------------------------------
@@ -235,16 +239,22 @@ class BokehServer(object):
     __logger__.setLevel(logging.DEBUG)
 
     __running_in_jupyterlab__ = True
-        
+         
     @staticmethod
     def __start_server():
+        try:
+            h = BokehServer.__logger__.handlers[0]
+        except IndexError:
+            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
+        except:
+            pass
         import socket
         from tornado.ioloop import IOLoop
         from bokeh.server.server import Server
         logging.getLogger('bokeh.server.util').setLevel(logging.ERROR)  # TODO: tmp stuff
         output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
         app = Application(FunctionHandler(BokehServer.__session_entry_point))
-        # TODO: the following in broken since bokeh 0.12.7: app.add(BokehSessionHandler())
+        app.add(BokehSessionHandler())
         srv = Server({'/': app}, io_loop=IOLoop.current(), port=0, allow_websocket_origin=['*'])
         BokehServer.__bkh_srv__ = srv
         BokehServer.__srv_id__ = uuid4().hex
