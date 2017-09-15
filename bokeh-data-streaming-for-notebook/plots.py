@@ -1482,8 +1482,9 @@ class ImageChannel(Channel):
                 self._animate_msg_label()
             else:
                 self._hide_msg_label()
-            image_shape_changed = sd.has_failed or self.__image_shape_changed(sd.buffer.shape)
-            self._current_image_shape = sd.buffer.shape if not empty_buffer else nan_buffer.shape
+            incoming_image = sd.buffer if not empty_buffer else nan_buffer
+            image_shape_changed = self.__image_shape_changed(incoming_image.shape)
+            self._current_image_shape = incoming_image.shape
             if not empty_buffer:
                 self.__setup_undefined_scales(sd.buffer.shape)
             if empty_buffer:
