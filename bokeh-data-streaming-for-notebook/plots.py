@@ -466,7 +466,10 @@ class BoxSelectionManager(NotebookCellContent):
         self._selection_cds = self.__setup_selection_data_source()
 
     def __del__(self):
-        del BoxSelectionManager.repository[self._uid]
+	try:
+	    del BoxSelectionManager.repository[self._uid]
+	except KeyError:
+	    pass
 
     def __setup_selection_data_source(self):
         cds = ColumnDataSource(data=dict(x0=[0], y0=[0], width=[0], height=[0]))
@@ -1318,8 +1321,12 @@ class ImageChannel(Channel):
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
             #fkwargs['output_backend'] = 'webgl'
-            fkwargs['x_range'] = self._xsc.bokeh_range
-            fkwargs['y_range'] = self._ysc.bokeh_range
+            xrg = Range1d() #self._xsc.bokeh_range
+            yrg = Range1d() #self._ysc.bokeh_range
+	        #print("ImageChannel.{}:set initial x-range to ({:.04f}, {:.04f})".format(self.name, xrg.start, xrg.end))
+            #print("ImageChannel.{}:set initial y-range to ({:.04f}, {:.04f})".format(self.name, yrg.start, yrg.end))
+            fkwargs['x_range'] = xrg
+            fkwargs['y_range'] = yrg
             fkwargs['width'] = props.get('width', 320)
             fkwargs['height'] = props.get('height', 320)
             fkwargs['toolbar_location'] = 'right' if fkwargs['height'] >= fkwargs['width'] else 'above'
@@ -1332,10 +1339,10 @@ class ImageChannel(Channel):
             if layout != 'tabs':
                 f.title.text = self.name
             ikwargs = dict()
-            ikwargs['x'] = -1
-            ikwargs['y'] = -1
-            ikwargs['dw'] = 2
-            ikwargs['dh'] = 2
+            ikwargs['x'] = 0
+            ikwargs['y'] = 1
+            ikwargs['dw'] = 1
+            ikwargs['dh'] = 1
             ikwargs['image'] = 'image'
             ikwargs['source'] = self._cds
             ikwargs['color_mapper'] = LinearColorMapper(palette=props.get('palette', Plasma256))
@@ -1383,12 +1390,11 @@ class ImageChannel(Channel):
 
     def __handle_range_change(self):
         try:
-            print("handle_range_change <<")
             sd = self._sd
             if not sd or sd.has_failed or not sum(sd.buffer.shape):
                 return
-            print("ImageChannel.{}:handle_range_change: x-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.x_range.start, self._mdl.x_range.end))
-            print("ImageChannel.{}:handle_range_change: y-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.y_range.start, self._mdl.y_range.end))
+            #print("ImageChannel.{}:handle_range_change: x-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.x_range.start, self._mdl.x_range.end))
+            #print("ImageChannel.{}:handle_range_change: y-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.y_range.start, self._mdl.y_range.end))
             image = self.__extract_image_for_current_ranges(sd.buffer)
             new_data = dict()
             new_data['image'] = [image]
@@ -1403,7 +1409,6 @@ class ImageChannel(Channel):
             print(e)
         finally:
             self._itm.range_change_handled()
-            print("handle_range_change >>")
 
     def __image_shape_changed(self, image_shape):
         return self._current_image_shape != image_shape
@@ -1531,9 +1536,9 @@ class ImageChannel(Channel):
             if not h:
                 yss = -1.
                 yse =  1.
-            if image_shape_changed:
-                print("ImageChannel.{}:changing x-range to ({:.04f}, {:.04f})".format(self.name, xss, xse))
-                print("ImageChannel.{}:changing y-range to ({:.04f}, {:.04f})".format(self.name, yss, yse))
+            if image_shape_changed and not empty_buffer: #TODO: remove 'and not empty_buffer'
+                #print("ImageChannel.{}:changing x-range to ({:.04f}, {:.04f})".format(self.name, xss, xse))
+                #print("ImageChannel.{}:changing y-range to ({:.04f}, {:.04f})".format(self.name, yss, yse))
                 self._mdl.x_range.update(start=xss, end=xse)
                 self._mdl.y_range.update(start=yss, end=yse)
                 self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
@@ -1840,7 +1845,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         self._channels = Children(self, Channel)
         self._channels.register_add_callback(self._on_add_channel)
         self.add(channels)
-
+        
     @property
     def bokeh_session(self):
         """return the associated bokeh session"""

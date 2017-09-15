@@ -43,8 +43,8 @@ class BokehSession(object):
     __repo_lock__ = Lock()
 
     __logger__ = logging.getLogger('BokehSession')
-    __logger__.setLevel(logging.DEBUG)
-    
+    __logger__.setLevel(logging.ERROR)
+
     def __init__(self, uuid=None):
         # session identifier
         self._uuid = uuid if uuid else str(uuid4())
@@ -146,7 +146,10 @@ class BokehSession(object):
         finally:
             self._closed = True
             with BokehSession.__repo_lock__:
-                del BokehSession.__repo__[self._uuid]
+                try:
+                    del BokehSession.__repo__[self._uuid]
+                except:
+                    pass
             BokehSession.print_repository_status()
             
     def setup_document(self):
@@ -235,19 +238,22 @@ class BokehServer(object):
     __sessions__ = deque()
     __sessions_lock__ = Lock()
 
+    __log_level__  = logging.ERROR
     __logger__ = logging.getLogger(module_logger_name)
-    __logger__.setLevel(logging.DEBUG)
+    __logger__.setLevel(__log_level__)
 
-    __running_in_jupyterlab__ = True
+    __running_in_jupyterlab__ = False
          
     @staticmethod
     def __start_server():
+        '''
         try:
             h = BokehServer.__logger__.handlers[0]
         except IndexError:
-            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
+            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=BokehServer.__log_level__)
         except:
             pass
+        '''
         import socket
         from tornado.ioloop import IOLoop
         from bokeh.server.server import Server
