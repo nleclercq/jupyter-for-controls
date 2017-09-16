@@ -42,7 +42,7 @@ class BokehSession(object):
     __repo__ = dict()
     __repo_lock__ = Lock()
 
-    __logger__ = logging.getLogger('BokehSession')
+    __logger__ = logging.getLogger(module_logger_name)
     __logger__.setLevel(logging.ERROR)
 
     def __init__(self, uuid=None):
