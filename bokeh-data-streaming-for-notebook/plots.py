@@ -466,10 +466,10 @@ class BoxSelectionManager(NotebookCellContent):
         self._selection_cds = self.__setup_selection_data_source()
 
     def __del__(self):
-	try:
-	    del BoxSelectionManager.repository[self._uid]
-	except KeyError:
-	    pass
+        try:
+            del BoxSelectionManager.repository[self._uid]
+        except KeyError:
+            pass
 
     def __setup_selection_data_source(self):
         cds = ColumnDataSource(data=dict(x0=[0], y0=[0], width=[0], height=[0]))

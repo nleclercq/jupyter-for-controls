@@ -241,9 +241,7 @@ class BokehServer(object):
     __log_level__  = logging.ERROR
     __logger__ = logging.getLogger(module_logger_name)
     __logger__.setLevel(__log_level__)
-
-    __running_in_jupyterlab__ = False
-         
+   
     @staticmethod
     def __start_server():
         '''
@@ -281,12 +279,9 @@ class BokehServer(object):
             session_info = {'session': new_session, 'application': None}
             BokehServer.__sessions__.appendleft(session_info)
         script = server_document(url=BokehServer.__srv_url__)
-        if BokehServer.__running_in_jupyterlab__:
-            data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
-            metadata = {EXEC_MIME_TYPE: {"server_id": BokehServer.__srv_id__}}
-            publish_display_data(data, metadata=metadata)
-        else: # running in jupyter notebbok
-            display(HTML(script))
+        data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
+        metadata = {EXEC_MIME_TYPE: {"server_id": BokehServer.__srv_id__}}
+        publish_display_data(data, metadata=metadata)
         BokehServer.__logger__.debug("BokehServer.open_session >>")
         
     @staticmethod
