@@ -37,6 +37,7 @@ from bokeh.util.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
 
 module_logger_name = "jupytango.jupyter.session"
 
+logging.degug(" ")
 
 # ------------------------------------------------------------------------------
 class BokehSessionHandler(Handler):
@@ -259,18 +260,9 @@ class BokehServer(object):
     __sessions__ = deque()
     __sessions_lock__ = Lock()
 
-    logging.degug("intializing logging...")
     __log_level__ = logging.DEBUG
     __logger__ = logging.getLogger(module_logger_name)
     __logger__.setLevel(__log_level__)
-    
-    '''
-    try:
-        logging.degug("intializing logging...")
-        BokehServer.__logger__.handlers[0]
-    except IndexError:
-        logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=BokehServer.__log_level__)      
-    '''
 
     @staticmethod
     def __start_server():
