@@ -17,7 +17,7 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-""" jupytango """
+"""jupytango"""
 
 from __future__ import print_function
 
@@ -402,7 +402,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
         """cleanup data sources"""
         for dsn, dsi in six.iteritems(self._data_sources):
             try:
-                #self.info("DataStream channel: cleaning up DataSource {}".format(dsn))
+                self.info("DataStream channel: cleaning up DataSource {}".format(dsn))
                 dsi.cleanup()
             except Exception as e:
                 self.error(e)
@@ -1843,9 +1843,9 @@ class LayoutChannel(Channel):
     def __update_tabs_selection(self):
         # TODO: we might face a race condition between server periodic callback and user action: mutex required?
         at = self._tabs_widget.active
-        #self.debug('LayoutChannel.update_tabs_selection: selection id is {}'.format(at))
+        self.debug('LayoutChannel.update_tabs_selection: selection id is {}'.format(at))
         cn = self._tabs_widget.tabs[at].title
-        #self.debug('LayoutChannel.update_tabs_selection: selection name is {}'.format(cn))
+        self.debug('LayoutChannel.update_tabs_selection: selection name is {}'.format(cn))
         self._channels[cn].update()
 
     def update(self):
@@ -1937,7 +1937,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         """asks each Channel to cleanup itself (e.g. release resources)"""
         for channel in self._channels.values():
             try:
-                #self.info("DataStream: cleaning up Channel {}".format(channel.name))
+                self.info("DataStream: cleaning up Channel {}".format(channel.name))
                 channel.cleanup()
             except Exception as e:
                 self.error(e)
@@ -2013,31 +2013,31 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         # cleanup each data stream
         for ds in self._data_streams:
             try:
-                #self.debug("DataStreamer: cleaning up DataStream {}".format(ds.name))
+                self.debug("DataStreamer: cleaning up DataStream {}".format(ds.name))
                 ds.cleanup()
             except Exception as e:
                 self.error(e)
-        #self.debug("DataStreamer: closing Bokeh session...")
+        self.debug("DataStreamer: closing Bokeh session...")
         # delegate the remaining actions to our super class (this is mandatory)
         try:
             super(DataStreamer, self).close()
         except Exception as e:
             self.error(e)
-        #self.debug("DataStreamer: Bokeh session closed")
+        self.debug("DataStreamer: Bokeh session closed")
 
     def start(self, delay=0.):
         """start periodic activity"""
         if not self.ready:
-            #self.debug("DataStreamer.start:session not ready:set auto_start to True")
+            self.debug("DataStreamer.start:session not ready:set auto_start to True")
             self._auto_start = True
         else:
             actual_tmo = delay if delay > 0. else self._start_delay
             if actual_tmo > 0.:
-                #self.debug('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
+                self.debug('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
                 self._start_delay = 0.
                 self.timeout_callback(self.start, actual_tmo)
             else:
-                #self.debug("DataStreamer.start: session ready, no delay, resuming...")
+                self.debug("DataStreamer.start: session ready, no delay, resuming...")
                 self.resume()
 
     def stop(self):
@@ -2080,18 +2080,18 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     def __on_model_changed(self):
         event = self._events.pop() 
         if event.emitter and event.data:
-            #self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
+            self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
             if len(self.document.roots):
                 for root in self.document.roots:
                     if root.name == str(event.emitter):
-                        #self.debug("removing figure {}".format(root.name))
+                        self.debug("removing figure {}".format(root.name))
                         self.document.remove_root(root)
             try:
-                #self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
+                self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
                 self.document.add_root(event.data, setter=self.bokeh_session_id)
             except Exception as e:
                 self.error(e)
-            #self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
+            self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
 
     @property
     def update_period(self):
@@ -2202,14 +2202,14 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
 
     def start(self):
         try:
-            #self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
+            self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
             self._data_streamer.start()
         except Exception as e:
             self.error(e)
 
     def close(self):
         try:
-            #self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
+            self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
             self._data_streamer.close()
         except Exception as e:
             self.error(e)

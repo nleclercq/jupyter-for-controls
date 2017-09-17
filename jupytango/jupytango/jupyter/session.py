@@ -17,7 +17,7 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-""" jupytango """
+"""jupytango"""
 
 from __future__ import print_function
 
@@ -259,18 +259,21 @@ class BokehServer(object):
     __sessions__ = deque()
     __sessions_lock__ = Lock()
 
-    __log_level__  = logging.ERROR
+    __log_level__ = logging.DEBUG
     __logger__ = logging.getLogger(module_logger_name)
     __logger__.setLevel(__log_level__)
-   
+    
+    '''
+    try:
+        BokehServer.__logger__.handlers[0]
+    except IndexError:
+        logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=BokehServer.__log_level__)      
+    except Exception as e:
+        print(e)
+    '''
+
     @staticmethod
     def __start_server():
-        try:
-            BokehServer.__logger__.handlers[0]
-        except IndexError:
-            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=BokehServer.__log_level__)
-        except:
-            pass
         import socket
         from tornado.ioloop import IOLoop
         from bokeh.server.server import Server
