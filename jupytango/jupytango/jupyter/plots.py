@@ -2013,31 +2013,31 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         # cleanup each data stream
         for ds in self._data_streams:
             try:
-                self.debug("DataStreamer: cleaning up DataStream {}".format(ds.name))
+                #self.debug("DataStreamer: cleaning up DataStream {}".format(ds.name))
                 ds.cleanup()
             except Exception as e:
                 self.error(e)
-        self.debug("DataStreamer: closing Bokeh session...")
+        #self.debug("DataStreamer: closing Bokeh session...")
         # delegate the remaining actions to our super class (this is mandatory)
         try:
             super(DataStreamer, self).close()
         except Exception as e:
             self.error(e)
-        self.debug("DataStreamer: Bokeh session closed")
+        #self.debug("DataStreamer: Bokeh session closed")
 
     def start(self, delay=0.):
         """start periodic activity"""
         if not self.ready:
-            self.debug("DataStreamer.start:session not ready:set auto_start to True")
+            #self.debug("DataStreamer.start:session not ready:set auto_start to True")
             self._auto_start = True
         else:
             actual_tmo = delay if delay > 0. else self._start_delay
             if actual_tmo > 0.:
-                self.debug('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
+                #self.debug('DataStreamer.start: actual start in {} seconds'.format(actual_tmo))
                 self._start_delay = 0.
                 self.timeout_callback(self.start, actual_tmo)
             else:
-                self.debug("DataStreamer.start: session ready, no delay, resuming...")
+                #self.debug("DataStreamer.start: session ready, no delay, resuming...")
                 self.resume()
 
     def stop(self):
@@ -2080,18 +2080,18 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     def __on_model_changed(self):
         event = self._events.pop() 
         if event.emitter and event.data:
-            self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
+            #self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
             if len(self.document.roots):
                 for root in self.document.roots:
                     if root.name == str(event.emitter):
-                        self.debug("removing figure {}".format(root.name))
+                        #self.debug("removing figure {}".format(root.name))
                         self.document.remove_root(root)
             try:
-                self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
+                #self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
                 self.document.add_root(event.data, setter=self.bokeh_session_id)
             except Exception as e:
                 self.error(e)
-            self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
+            #self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
 
     @property
     def update_period(self):

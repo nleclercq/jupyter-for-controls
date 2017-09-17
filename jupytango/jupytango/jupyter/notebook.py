@@ -29,7 +29,9 @@ from bokeh.palettes import Plasma256
 from bokeh.io import show, output_notebook, reset_output
 from bokeh.plotting import figure
 from bokeh.resources import INLINE
+
 bokeh_redirected = False
+
 # tango module
 try:
     import tango
@@ -67,7 +69,6 @@ def plot_tango_attribute(ns):
         ap = tango.AttributeProxy(ns.attr)
         av = ap.read()
         fqan = ap.get_device_proxy().name() + "/" + ap.name()
-        title = ns.attr + " [" + fqan + "]"
     elif n == 3:
         dn, _, an = ns.attr.rpartition("/")
         dp = tango.DeviceProxy(dn)
