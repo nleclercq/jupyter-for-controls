@@ -29,7 +29,7 @@ import subprocess
 from IPython.utils.io import ask_yes_no
 from IPython.core.interactiveshell import InteractiveShell
 
-from jupytango.tools.display import pretty, Ansi
+from jupytango.tools.display import Ansi
 
 class ColoredFormatter(logging.Formatter):
 
@@ -56,16 +56,6 @@ def ask_yn(question, default=None, interrupt=None):
 
 def running_in_jupyter_notebook():
     return 'ipykernel' in sys.modules
-
-
-@pretty
-class String(str):
-    """
-    Simple wrapper that lets IPython display strings like 'print' instead of 'repr'
-    On Windows, it also provides ANSI sequence support
-    """
-    pass
-
 
 def ignore_signals():
     """preexec function called in the process that let it ignore KeyboardInterrupt signals"""

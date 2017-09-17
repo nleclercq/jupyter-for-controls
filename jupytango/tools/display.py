@@ -23,25 +23,11 @@ from __future__ import print_function
 from six import text_type, string_types, iteritems
 import re
 import os
-import sys
 from difflib import ndiff
 import cgi
 import h5py
 
 from prettytable import PrettyTable
-
-
-def print_over(text):
-    """Write some text over the last output line"""
-    print('\r\033[K{}'.format(text), end='')  # vs print('\r{}'.format(text.ljust(79)), end='')
-    sys.stdout.flush()  # just in case
-
-
-def print_now(text):
-    """Write some text over the last output line"""
-    print('{}'.format(text), end='')  # vs print('\r{}'.format(text.ljust(79)), end='')
-    sys.stdout.flush()  # just in case
-
 
 # ======================
 # Pretty Print (IPython)
