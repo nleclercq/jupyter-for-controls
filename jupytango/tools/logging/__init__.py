@@ -1,7 +1,7 @@
 # ===========================================================================
 #  This file is part of the Flyscan Ecosystem
 #
-#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -17,31 +17,4 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""jupytango"""
-
-import itango
-from jupytango import magics as jptm
-
-
-def load_ipython_extension(app):
-    try:
-        itango.load_ipython_extension(app)
-    except Exception as e:
-        print(e)
-    try:
-        jptm.load_ipython_extension(app)
-    except Exception as e:
-        print(e)
-
-
-def unload_ipython_extension(app):
-  try:
-      itango.unload_ipython_extension(app)
-  except Exception as e:
-      print(e)
-  try:
-      jptm.unload_ipython_extension(app)
-  except Exception as e:
-      print(e)
-
-
+from fs.utils.logging.LogAdapter import tracer, LogAdapter, DeviceLogAdapter, NotebookCellLogger
