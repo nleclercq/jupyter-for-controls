@@ -117,17 +117,16 @@ class NotebookCellContent(object):
 
     default_logger = "jupytango.jupyter"
 
+    try:
+        h = logging.getLogger(default_logger).handlers[0]
+    except IndexError:
+        logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
+
     def __init__(self, name, logger_name=None):
         self._name = name
         self._uid = uuid4().int
         self._context = CellContext()
         self._logger = logging.getLogger(NotebookCellContent.default_logger if logger_name is None else logger_name)
-        '''
-        try:
-            h = self._logger.handlers[0]
-        except IndexError:
-            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.DEBUG)
-        '''
 
     @property
     def name(self):
