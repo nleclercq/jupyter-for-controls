@@ -49,9 +49,8 @@ from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
 import bokeh.events
 
-from jupytango.tools.logging import *
-from jupytango.jupyter.session import BokehSession
-from jupytango.jupyter.tools import cell_context, CellContext, NotebookCellContent
+from session import BokehSession
+from tools import cell_context, CellContext, NotebookCellContent
 
 from skimage.transform import rescale
 
@@ -951,7 +950,6 @@ class ScalarChannel(Channel):
         kwargs['legend'] = None if not show_legend else data_source + ' '
         self._crdr[data_source] = figure.circle(**kwargs)
 
-    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1125,7 +1123,6 @@ class SpectrumChannel(Channel):
         kwargs['legend'] = None if not show_legend else y_column + ' '
         self._rdr[y_column] = bkh_figure.line(**kwargs)
 
-    @tracer
     def setup_model(self, **kwargs):
         try:
             """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
@@ -1335,7 +1332,6 @@ class ImageChannel(Channel):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._mdl
 
-    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1621,7 +1617,6 @@ class GenericChannel(Channel):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._delegate_model
 
-    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1829,7 +1824,6 @@ class LayoutChannel(Channel):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._mdl
 
-    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -2003,12 +1997,10 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         else:
             raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
 
-    @tracer
     def open(self):
         """open the session and optionally start it """
         super(DataStreamer, self).open()
 
-    @tracer
     def close(self):
         """close the session"""
         # suspend periodic callback 
@@ -2016,7 +2008,6 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         # the underlying actions will be performed under critical section
         self.safe_document_modifications(self.__close)
 
-    @tracer
     def __close(self):
         """close/cleanup everything"""
         # cleanup each data stream
@@ -2034,7 +2025,6 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
             self.error(e)
         self.debug("DataStreamer: Bokeh session closed")
 
-    @tracer
     def start(self, delay=0.):
         """start periodic activity"""
         if not self.ready:
@@ -2050,7 +2040,6 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
                 self.debug("DataStreamer.start: session ready, no delay, resuming...")
                 self.resume()
 
-    @tracer
     def stop(self):
         """stop periodic activity"""
         if not self.ready:
@@ -2058,7 +2047,6 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         else:
             self.pause()
 
-    @tracer
     def setup_document(self):
         """add the data stream models to the bokeh document"""
         try:
