@@ -265,14 +265,12 @@ class BokehServer(object):
    
     @staticmethod
     def __start_server():
-        '''
         try:
-            h = BokehServer.__logger__.handlers[0]
+            BokehServer.__logger__.handlers[0]
         except IndexError:
             logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=BokehServer.__log_level__)
         except:
             pass
-        '''
         import socket
         from tornado.ioloop import IOLoop
         from bokeh.server.server import Server

@@ -402,7 +402,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
         """cleanup data sources"""
         for dsn, dsi in six.iteritems(self._data_sources):
             try:
-                self.info("DataStream channel: cleaning up DataSource {}".format(dsn))
+                #self.info("DataStream channel: cleaning up DataSource {}".format(dsn))
                 dsi.cleanup()
             except Exception as e:
                 self.error(e)
@@ -1937,7 +1937,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         """asks each Channel to cleanup itself (e.g. release resources)"""
         for channel in self._channels.values():
             try:
-                self.info("DataStream: cleaning up Channel {}".format(channel.name))
+                #self.info("DataStream: cleaning up Channel {}".format(channel.name))
                 channel.cleanup()
             except Exception as e:
                 self.error(e)
@@ -2202,14 +2202,14 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
 
     def start(self):
         try:
-            self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
+            #self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
             self._data_streamer.start()
         except Exception as e:
             self.error(e)
 
     def close(self):
         try:
-            self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
+            #self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
             self._data_streamer.close()
         except Exception as e:
             self.error(e)
