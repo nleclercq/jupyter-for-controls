@@ -1,1 +1,1 @@
-../bokeh-data-streaming-for-notebook/session.py
+../jupytango/jupytango/jupyter/session.py

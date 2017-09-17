@@ -19,7 +19,7 @@
 
 """jupytango"""
 
-from .tools import *
-from .plots import *
-from .notebook import *
+from jupytango.jupyter.tools import *
+from jupytango.jupyter.plots import *
+from jupytango.jupyter.notebook import *
 
