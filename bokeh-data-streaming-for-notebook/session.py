@@ -259,7 +259,7 @@ class BokehServer(object):
     __sessions__ = deque()
     __sessions_lock__ = Lock()
 
-    __log_level__  = logging.ERROR
+    __log_level__ = logging.ERROR
     __logger__ = logging.getLogger(module_logger_name)
     __logger__.setLevel(__log_level__)
    

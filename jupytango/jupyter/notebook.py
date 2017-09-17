@@ -21,7 +21,6 @@
 
 from __future__ import print_function
 import datetime
-import logging
 
 # bokeh modules
 from bokeh.models.mappers import LinearColorMapper
@@ -36,9 +35,6 @@ try:
     import tango
 except:
     import PyTango as tango
-
-# ------------------------------------------------------------------------------
-fs_logger = logging.getLogger('jupytango.jupyter.notebook')
 
 
 # ------------------------------------------------------------------------------
@@ -78,11 +74,9 @@ def plot_tango_attribute(ns):
         av = dp.read_attribute(an)
         fqan = ns.attr
     else:
-        raise Exception(
-            "invalid attribute name specified - expected an alias or something like 'fully/qualified/attribute/name'")
+        raise Exception("invalid attribute name specified - expected an alias or something like 'fully/qualified/attribute/name'")
     kwargs = dict()
-    kwargs['webgl'] = True
-    kwargs['tools'] = 'pan,wheel_zoom,box_select,resize,reset,hover'
+    kwargs['tools'] = 'pan,box_zoom,wheel_zoom,reset,hover'
     kwargs['title'] = fqan + ' @ ' + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if ns.width is not None:
         kwargs['plot_width'] = ns.width
