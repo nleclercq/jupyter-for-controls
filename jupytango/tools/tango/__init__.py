@@ -1,7 +1,7 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
-#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
+
+"""jupytango"""
 
 from __future__ import print_function
 from six import string_types
@@ -32,11 +34,11 @@ try:
 except ImportError:
     from PyTango.api2 import run, Device, DeviceMeta, attribute, command, device_property
 
-from fs.utils.tango.TangoHelpers import *
-from fs.utils.tango.TangoEventsConsumer import *
+from jupytango.tools.tango.TangoHelpers import *
+from jupytango.tools.tango.TangoEventsConsumer import *
 
-from fs.utils.display import TreeNode, Ansi
-from fs.utils.errors import silent_catch
+from jupytango.tools.display import TreeNode, Ansi
+from jupytango.tools.errors import silent_catch
 
 # =============
 # miscellaneous

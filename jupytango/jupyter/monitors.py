@@ -1,6 +1,28 @@
+# ===========================================================================
+#  This file is part of the Tango Ecosystem
+#
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
+#
+#  This is free software: you can redistribute it and/or modify it under the
+#  terms of the GNU Lesser General Public License as published by the Free
+#  Software Foundation, either version 3 of the License, or (at your option)
+#  any later version.
+#
+#  This is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+#  FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+#  more details.
+#
+#  You should have received a copy of the GNU Lesser General Public License
+#  along with This.  If not, see <http://www.gnu.org/licenses/>.
+# ===========================================================================
+
+"""jupytango"""
+
 from __future__ import print_function
 import time
-from collections import deque
+import uuid
+import logging
 import threading
 # python2/ python3 compatibility
 from six import iteritems, string_types
@@ -9,14 +31,12 @@ try:
     import tango
 except:
     import PyTango as tango
-# flyscan modules
-from fs.utils.errors import silent_catch
-from fs.utils.tango.TangoEventsConsumer import TangoEventSubscriptionForm, TangoEventsConsumer
-from fs.client.jupyter.plots import *
+# jupytango
+from jupytango.tools.tango.TangoEventsConsumer import TangoEventSubscriptionForm, TangoEventsConsumer
+from jupytango.jupyter.plots import *
 
 # ------------------------------------------------------------------------------
-fs_logger = logging.getLogger('fs.client.jupyter.monitors')
-
+fs_logger = logging.getLogger('jupytango.jupyter.monitors')
 
 
 # ------------------------------------------------------------------------------
@@ -382,15 +402,13 @@ monitors = dict()
 
 
 # ------------------------------------------------------------------------------
-class Monitor(NotebookCellContent):
+class Monitor(object):
     """ base class for Tango attribute monitors """
 
     def __init__(self, **kwargs):
         try:
             # generate uid
-            self._uid = uuid4().int
-            # init super class
-            NotebookCellContent.__init__(self, str(self._uid))
+            self._uid = uuid.uuid4().int
             # running in standalone mode
             self._standalone_mode = kwargs.get('standalone_mode', True)
             # refresh period in seconds

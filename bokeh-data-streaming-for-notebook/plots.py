@@ -1,16 +1,40 @@
+# ===========================================================================
+#  This file is part of the Tango Ecosystem
+#
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
+#
+#  This is free software: you can redistribute it and/or modify it under the
+#  terms of the GNU Lesser General Public License as published by the Free
+#  Software Foundation, either version 3 of the License, or (at your option)
+#  any later version.
+#
+#  This is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+#  FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+#  more details.
+#
+#  You should have received a copy of the GNU Lesser General Public License
+#  along with This.  If not, see <http://www.gnu.org/licenses/>.
+# ===========================================================================
+
+"""jupytango"""
+
 from __future__ import print_function
 
+import six
+import uuid
 import datetime
 from collections import OrderedDict, deque
 from math import ceil, pi
-import six
 
 import ipywidgets as widgets
 
 import math as mt
 import numpy as np
 
-from bokeh.layouts import row, column, layout, gridplot
+from IPython.display import display
+
+from bokeh.layouts import column, layout, gridplot
 from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter, Label
 from bokeh.models import widgets as BokehWidgets
 from bokeh.models.glyphs import Rect
@@ -25,12 +49,21 @@ from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
 import bokeh.events
 
-from tools import *
-from session import BokehSession
+from jupytango.tools.logging import *
+from jupytango.jupyter.session import BokehSession
+from jupytango.jupyter.tools import cell_context, CellContext, NotebookCellContent
 
 from skimage.transform import rescale
 
-module_logger_name = "fs.client.jupyter.plots"
+module_logger_name = "jupytango.jupyter.plots"
+
+
+# ------------------------------------------------------------------------------
+def enum(*sequential):
+    enums = dict(zip(sequential, range(len(sequential))))
+    enums['len'] = len(sequential)
+    return type('Enum', (), enums)
+
 
 # ------------------------------------------------------------------------------
 class Children(OrderedDict):
@@ -458,7 +491,7 @@ class BoxSelectionManager(NotebookCellContent):
     repository = dict()
 
     def __init__(self, selection_callback=None, reset_callback=None):
-        self._uid = uuid4().int
+        self._uid = uuid.uuid4().int
         NotebookCellContent.__init__(self, str(self._uid), logger_name=module_logger_name)
         BoxSelectionManager.repository[self._uid] = self
         self._selection_callback = selection_callback
@@ -547,7 +580,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['width'][0] = width
             cds.data['height'][0] = height
             cds.change.emit()
-            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
+            var imp = "from jupytango.jupyter.plots import BoxSelectionManager;"
             var pfx = "BoxSelectionManager.repository[".concat(cds.tags[0], "].on_selection_change(")
             var arg = JSON.stringify({'x0':[x0], 'y0':[y0], 'width':[width], 'height':[height]})
             var sfx = ")"
@@ -564,7 +597,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['width'][0] = 0
             cds.data['height'][0] = 0
             cds.change.emit()
-            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
+            var imp = "from jupytango.jupyter.plots import BoxSelectionManager;"
             var rst = "BoxSelectionManager.repository[".concat(cds.tags[0],"].on_selection_reset()")
             var cmd  = imp.concat(rst)
             console.log(cmd)
@@ -1581,7 +1614,7 @@ class GenericChannel(Channel):
     def __init__(self, name, data_source=None, model_properties=dict()):
         Channel.__init__(self, name, data_sources=[data_source], model_properties=model_properties)
         self._delegate = None
-        self._delegate_model_id = str(uuid4())
+        self._delegate_model_id = str(uuid.uuid4())
         self._delegate_model = None
 
     def get_model(self):

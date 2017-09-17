@@ -1,7 +1,7 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
-#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -17,7 +17,7 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""This package provides an active object implementation called Task"""
+"""jupytango"""
 
-from fs.utils.task.Message import Message, MessageIsNotWaitable, MessageProcessingTimeout
-from fs.utils.task.Task import Task
+from jupytango.tools.task.Message import Message, MessageIsNotWaitable, MessageProcessingTimeout
+from jupytango.tools.task.Task import Task

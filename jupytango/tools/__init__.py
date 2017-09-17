@@ -1,7 +1,7 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
-#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -17,7 +17,7 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""This package provides some utilities classes for the Flyscan project"""
+"""jupytango"""
 
 from __future__ import print_function
 from six import with_metaclass, iteritems
@@ -26,7 +26,7 @@ import imp
 import os.path as osp
 from os import listdir
 
-from fs.utils.display import mapping_tree, pretty
+from jupytango.tools.display import mapping_tree, pretty
 
 from six import PY2
 if not PY2:

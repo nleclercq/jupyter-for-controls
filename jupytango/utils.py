@@ -29,8 +29,7 @@ import subprocess
 from IPython.utils.io import ask_yes_no
 from IPython.core.interactiveshell import InteractiveShell
 
-from fs.utils.display import pretty, Ansi
-
+from jupytango.tools.display import pretty, Ansi
 
 class ColoredFormatter(logging.Formatter):
 

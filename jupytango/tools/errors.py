@@ -1,7 +1,7 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
-#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -17,14 +17,14 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""The flyscan error handling"""
+"""jupytango"""
 
 from __future__ import print_function
 import sys
 import traceback
 from contextlib import contextmanager
 
-from fs.utils.display import TreeNode
+from jupytango.tools.display import TreeNode
 
 
 # =====

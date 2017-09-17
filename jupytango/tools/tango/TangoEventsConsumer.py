@@ -1,7 +1,7 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
-#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -17,14 +17,14 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""A Tango device viewer task"""
+"""jupytango"""
 
 from __future__ import print_function
 import os
 import logging
 from PyTango import EventType, EventData, DeviceProxy, AttrConfEventData, DataReadyEventData
 
-from fs.utils.task import Task
+from jupytango.tools.task import Task
 
 
 class TangoEventSubscriptionAction(object):
@@ -188,7 +188,7 @@ def pre_subscription_action(form, proxy):
 
 class EventManager(object):
 
-    logger = logging.getLogger('fs.utils.tango.EventManager')
+    logger = logging.getLogger('jupytango.tools.tango.EventManager')
     logger.setLevel(logging.ERROR)
 
     def __init__(self):

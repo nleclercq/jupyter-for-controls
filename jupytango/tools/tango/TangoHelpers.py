@@ -1,7 +1,7 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
-#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -17,30 +17,13 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
+"""jupytango"""
+
 from six import iteritems, string_types
 import time
 
 import numpy
 import PyTango
-
-
-# def convert_dtype(dtype):
-#     """Returns the corresponding Tango type from a numpy dtype"""
-#     if dtype.str.startswith('|S'):
-#         return PyTango.DevString
-#     return {
-#         '|b1': PyTango.DevBoolean,
-#         '|i1': PyTango.DevUChar,
-#         '|u1': PyTango.DevUChar,
-#         '<i2': PyTango.DevShort,
-#         '<u2': PyTango.DevUShort,
-#         '<i4': PyTango.DevLong,
-#         '<u4': PyTango.DevULong,
-#         '<i8': PyTango.DevLong64,
-#         '<u8': PyTango.DevULong64,
-#         '<f4': PyTango.DevFloat,
-#         '<f8': PyTango.DevDouble,
-#     }[dtype.str]
 
 
 TANGO_TYPES = {

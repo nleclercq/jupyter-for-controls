@@ -1,7 +1,7 @@
-# ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+# ==============================# ===========================================================================
+#  This file is part of the Tango Ecosystem
 #
-#  Copyright 2014-EOT Synchrotron SOLEIL, St.Aubin, France
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
 #  This is free software: you can redistribute it and/or modify it under the
 #  terms of the GNU Lesser General Public License as published by the Free
@@ -17,7 +17,7 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""This module defines the Task class: a thread to which you can post messages"""
+"""jupytango"""
 
 from __future__ import print_function
 
@@ -31,8 +31,8 @@ import threading
 import time
 import ctypes
 
-from fs.utils.task.Message import Message, MessageInvalidIdentifier, MessageIsNotWaitable
-from fs.utils.errors import silent_catch
+from jupytango.tools.task.Message import Message, MessageInvalidIdentifier, MessageIsNotWaitable
+from jupytango.tools.errors import silent_catch
 
 
 # ===========================================================================
@@ -48,7 +48,7 @@ class Task(threading.Thread):
     The child class should implement the following member functions:
     * on_init()
     * on_exit()
-    * handle_message(fs.utils.task.Message.Message)
+    * handle_message(jupytango.tools.task.Message.Message)
     * handle_periodic_message()
     """
 

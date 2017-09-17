@@ -30,34 +30,22 @@ except:
   from IPython.config import SingletonConfigurable
   from IPython.utils.traitlets import CUnicode, Enum, Instance
 
-from IPython.display import display, clear_output
-from IPython.core.page import page
 from IPython.core.magic import Magics, magics_class, line_magic
-from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring, UsageError
+from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 
-from fs import __quickstart__
+from jupytango.utils import ColoredFormatter, register_alias, spawn_atk, spawn_jive, spawn_astor
 
-from fs.core.parsing import BasicComposite, BasicComponent
-from fs.core.configuration import ScanActionType, PostScanActionType, TrajectoryModeType
-from fs.client.Proxy import FlyScanServerWrapper
-from jupytango.utils import ask_yn, ColoredFormatter, register_alias, get_doc, get_ipython, running_in_jupyter_notebook
-from jupytango.utils import spawn_atk, spawn_jive, spawn_astor
-
-from fs.utils.errors import silent_catch
-
-from jupytango.monitors import open_tango_monitor
-from jupytango.notebook import plot_tango_attribute
-
+from jupytango.jupyter.monitors import open_tango_monitor
+from jupytango.jupyter.notebook import plot_tango_attribute
 
 try:
     # try to import tango modules
     import tango
 except:
     import PyTango as tango
-  
+
 from itango.itango import __DeviceProxy_completer as complete_device_proxy
 from itango.itango import __AttributeProxy_completer as complete_attribute_proxy
-from itango.itango import __get_device_proxy as get_device_proxy
 
 fs_logger = logging.getLogger('jupytango.magics')
 
@@ -78,19 +66,6 @@ def magic_key(name):
 def str_param_key(name):
     """compute a regex key matching a function call parameter which is expected to be a string"""
     return r'''.*{}\(['"]\w*$'''.format(re.escape(name))
-
-# ====================
-# Extension Completers
-# ====================
-
-def complete_targets(shell, evt):
-    del shell, evt  # unused
-    return get_fss().query_devices()
-
-
-def complete_devices(shell, evt):
-    del shell, evt  # unused
-    return list(get_fss().db.get_device_exported('*'))
 
 # ================
 # Extension Magics
@@ -115,7 +90,7 @@ class JupytangoMagics(Magics):
     completers = {
         'plot_tango_attribute': complete_attribute_proxy,
         'tango_monitor': complete_attribute_proxy,
-        'open_atkpanel': complete_devices
+        'open_atkpanel': complete_device_proxy
     }
 
     # logger
@@ -194,32 +169,28 @@ class JupytangoMagics(Magics):
 # =========
 
 def load_ipython_extension(shell):
-    print("Welcome to the JupyTango CLI")
+    print("Welcome to the JupyTango.")
     # configure some logging if no handler is specified for root or fs
     if not logging.root.handlers and not fs_logger.handlers:
         handler = logging.StreamHandler()
         handler.setFormatter(ColoredFormatter("%(levelname)s [%(name)s] %(message)s"))
         fs_logger.addHandler(handler)
     # register magics
-    shell.register_magics(FssMagics)
+    shell.register_magics(JupytangoMagics)
     # register magics aliases
-    for magic_name, alias_name in FssMagics.aliases.items():
+    for magic_name, alias_name in JupytangoMagics.aliases.items():
         register_alias(shell, alias_name, magic_name)
     # register completers
-    for key, completer in FssMagics.iter_hooks():
+    for key, completer in JupytangoMagics.iter_hooks():
         shell.set_hook("complete_command", completer, re_key=key)
     shell.set_hook('complete_command', complete_device_proxy, re_key = ".*DeviceProxy[^\w\.]+")
     shell.set_hook('complete_command', complete_device_proxy, re_key = ".*Device[^\w\.]+")
     shell.set_hook('complete_command', complete_attribute_proxy, re_key = ".*AttributeProxy[^\w\.]+")
     shell.set_hook('complete_command', complete_attribute_proxy, re_key = ".*Attribute[^\w\.]+")
-    # correct a bug in IPython 0.13 in which _repr_pretty_ is not called for children classes
-    plain_text_formatter = shell.display_formatter.formatters['text/plain']
-    for cls in (BasicComposite, BasicComponent):
-        plain_text_formatter.for_type(cls, lambda obj, p, cycle: obj._repr_pretty_(p, cycle))
     print("JupyTango magics registered. Have a nice session...")
 
 
 def unload_ipython_extension(shell):
-    print('Leaving the JupyTango CLI...')
-    print('bye!')
+    print('Leaving the JupyTango...')
+    print('Bye!')
 

@@ -1,5 +1,5 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
 #  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
@@ -35,13 +35,13 @@ def load_ipython_extension(app):
 
 
 def unload_ipython_extension(app):
-  try:
-      itango.unload_ipython_extension(app)
-  except Exception as e:
-      print(e)
-  try:
-      jptm.unload_ipython_extension(app)
-  except Exception as e:
-      print(e)
+    try:
+        itango.unload_ipython_extension(app)
+    except Exception as e:
+        print(e)
+    try:
+        jptm.unload_ipython_extension(app)
+    except Exception as e:
+        print(e)
 
 

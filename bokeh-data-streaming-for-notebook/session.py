@@ -1,22 +1,42 @@
+# ===========================================================================
+#  This file is part of the Tango Ecosystem
+#
+#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
+#
+#  This is free software: you can redistribute it and/or modify it under the
+#  terms of the GNU Lesser General Public License as published by the Free
+#  Software Foundation, either version 3 of the License, or (at your option)
+#  any later version.
+#
+#  This is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+#  FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+#  more details.
+#
+#  You should have received a copy of the GNU Lesser General Public License
+#  along with This.  If not, see <http://www.gnu.org/licenses/>.
+# ===========================================================================
+
+"""jupytango"""
+
 from __future__ import print_function
 
 import logging
-from threading import Lock, Condition
+from threading import Lock
 from collections import deque
 from uuid import uuid4
 
-from IPython.display import HTML, display, publish_display_data
+from IPython.display import publish_display_data
 
 from bokeh.io import output_notebook
-from bokeh.plotting import show
-from bokeh.resources import Resources, INLINE
-from bokeh.server.server import Server
+from bokeh.resources import Resources
 from bokeh.application import Application
 from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import server_document
 from bokeh.util.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
 
-module_logger_name = "fs.client.jupyter.session"
+module_logger_name = "jupytango.jupyter.session"
+
 
 # ------------------------------------------------------------------------------
 class BokehSessionHandler(Handler):
@@ -35,6 +55,7 @@ class BokehSessionHandler(Handler):
     
     def modify_document(self, doc):
         return doc
+
 
 # ------------------------------------------------------------------------------
 class BokehSession(object):

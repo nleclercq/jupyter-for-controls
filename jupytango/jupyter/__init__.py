@@ -1,5 +1,5 @@
 # ===========================================================================
-#  This file is part of the Flyscan Ecosystem
+#  This file is part of the Tango Ecosystem
 #
 #  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
 #
