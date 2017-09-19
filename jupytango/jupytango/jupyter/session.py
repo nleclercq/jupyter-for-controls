@@ -26,14 +26,16 @@ from threading import Lock
 from collections import deque
 from uuid import uuid4
 
-from IPython.display import publish_display_data
+from IPython.display import HTML, display, publish_display_data
 
-from bokeh.io import output_notebook
+from bokeh.io import output_notebook, curstate
 from bokeh.resources import Resources
 from bokeh.application import Application
 from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import server_document
 from bokeh.util.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
+
+from tools import enum
 
 module_logger_name = "jupytango.jupyter.session"
 
@@ -65,13 +67,12 @@ class BokehSession(object):
     __repo_lock__ = Lock()
 
     __logger__ = logging.getLogger(module_logger_name)
-    __logger__.setLevel(logging.ERROR)
 
     def __init__(self, uuid=None):
         # session identifier
         self._uuid = uuid if uuid else str(uuid4())
-        # associated bokeh application 
-        self._app = None #TODO: is this really useful?
+        # the session info
+        self._info = None
         # the associated bokeh document (for experts only)
         self._doc = None
         # periodic callback period in seconds - defaults to None (i.e. disabled)
@@ -103,9 +104,13 @@ class BokehSession(object):
                     pass
                 except Exception as e:
                     BokehSession.__logger__.error(e)
-    
-    def _on_session_created(self, app, doc):
-        self._app = app
+
+    def _on_session_created(self, session_info):
+        self._info = session_info
+        self._doc = session_info['doc']
+        self.setup_document()
+
+    def _on_session_created_backup(self, doc):
         self._doc = doc
         self.setup_document()
 
@@ -121,16 +126,20 @@ class BokehSession(object):
         return self._doc is not None
 
     @property
+    def server(self):
+        return self._info['server']
+
+    @property
     def document(self):
         return self._doc
 
     @property
-    def bokeh_session_id(self):
-        return self._doc.session_context.id if self._doc else None
+    def bokeh_session(self):
+        return self._info['server'].get_sessions('/')[0]
 
     @property
-    def application(self):
-        return self._app
+    def bokeh_session_id(self):
+        return self._doc.session_context.id if self._doc else None
         
     @property
     def suspended(self):
@@ -251,23 +260,105 @@ class BokehSession(object):
          
 # ------------------------------------------------------------------------------
 class BokehServer(object):
-
     __bkh_srv__ = None
     __srv_url__ = None
     __srv_id__ = None
     __srv_lock__ = Lock()
-    
+
     __sessions__ = deque()
     __sessions_lock__ = Lock()
 
     __logger__ = logging.getLogger(module_logger_name)
-    __logger__.setLevel(logging.ERROR)
+
+    __running_in_jupyterlab__ = True
+
+    __jcontext__ = None
+
+    JupyterContext = enum('LAB', 'NOTEBOOK')
 
     @staticmethod
-    def __start_server():
+    def __spawn_server():
+        import os
         import socket
         from tornado.ioloop import IOLoop
         from bokeh.server.server import Server
+        try:
+            jc = os.environ['JUPYTER_CONTEXT']
+            if jc.upper() not in ['LAB', 'NOTEBOOK']:
+                raise KeyError()
+            BokehServer.__jcontext__ = \
+                BokehServer.JupyterContext.LAB if jc.upper() == "LAB" else BokehServer.JupyterContext.NOTEBOOK
+        except KeyError:
+            print("warning: JUPYTER_CONTEXT env. var. not set or has invalid value!")
+            print("warning: using default JUPYTER_CONTEXT value 'LAB'  [possible values: LAB, NOTEBOOK]")
+            BokehServer.__jcontext__ = BokehServer.JupyterContext.LAB
+        logging.getLogger('tornado').setLevel(logging.ERROR)  # TODO: tmp stuff
+        logging.getLogger('bokeh.server.tornado').setLevel(logging.ERROR)  # TODO: tmp stuff
+        logging.getLogger('bokeh.server.util').setLevel(logging.ERROR)  # TODO: tmp stuff
+        output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
+        app = Application(FunctionHandler(BokehServer.__session_entry_point))
+        app.add(BokehSessionHandler())
+        srv = Server({'/': app}, io_loop=IOLoop.current(), port=0, allow_websocket_origin=['*'])
+        srv_id = uuid4().hex
+        curstate().uuid_to_server[srv_id] = srv
+        srv_addr = srv.address if srv.address else socket.gethostbyname(socket.gethostname())
+        srv_url = 'http://{}:{}/'.format(srv_addr, srv.port)
+        srv.start()
+        return {'server':srv, 'server_id':srv_id, 'server_url':srv_url}
+
+    @staticmethod
+    def open_session(new_session):
+        BokehServer.__logger__.debug("BokehServer.open_session <<")
+        assert (isinstance(new_session, BokehSession))
+        with BokehServer.__srv_lock__:
+            if not BokehServer.__bkh_srv__:
+                BokehServer.__logger__.debug("BokehServer.open_session.spawning server")
+                srv_info = BokehServer.__spawn_server()
+                BokehServer.__logger__.debug("BokehServer.open_session.server spawn")
+        with BokehServer.__sessions_lock__:
+            session_info = srv_info
+            session_info['session'] = new_session
+            BokehServer.__sessions__.appendleft(session_info)
+        script = server_document(url=srv_info['server_url'])
+        if BokehServer.__jcontext__ == BokehServer.JupyterContext.LAB:
+            data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
+            metadata = {EXEC_MIME_TYPE: {"server_id": srv_info['server_id']}}
+            publish_display_data(data, metadata=metadata)
+        else: # running in jupyter notebbok
+            display(HTML(script))
+        BokehServer.__logger__.debug("BokehServer.open_session >>")
+
+    @staticmethod
+    def __session_entry_point(doc):
+        try:
+            BokehServer.__logger__.debug("BokehServer.session_entry_point <<")
+            with BokehServer.__sessions_lock__:
+                session_info = BokehServer.__sessions__.pop()
+            session = session_info['session']
+            session_info['doc'] = doc
+            session._on_session_created(session_info)
+        except Exception as e:
+            BokehServer.__logger__.error(e)
+        finally:
+            BokehServer.__logger__.debug("BokehServer.session_entry_point >>")
+            return doc
+
+    @staticmethod
+    def __start_server_backup():
+        import os
+        import socket
+        from tornado.ioloop import IOLoop
+        from bokeh.server.server import Server
+        try:
+            jc = os.environ['JUPYTER_CONTEXT']
+            if jc.upper() not in ['LAB', 'NOTEBOOK']:
+                raise KeyError()
+            BokehServer.__jcontext__ = \
+                BokehServer.JupyterContext.LAB if jc.upper() == "LAB" else BokehServer.JupyterContext.NOTEBOOK
+        except KeyError:
+            print("warning: JUPYTER_CONTEXT env. var. not set or has invalid value!")
+            print("warning: using default JUPYTER_CONTEXT value 'LAB'  [possible values: LAB, NOTEBOOK]")
+            BokehServer.__jcontext__ = BokehServer.JupyterContext.LAB
         logging.getLogger('bokeh.server.util').setLevel(logging.ERROR)  # TODO: tmp stuff
         output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
         app = Application(FunctionHandler(BokehServer.__session_entry_point))
@@ -275,12 +366,13 @@ class BokehServer(object):
         srv = Server({'/': app}, io_loop=IOLoop.current(), port=0, allow_websocket_origin=['*'])
         BokehServer.__bkh_srv__ = srv
         BokehServer.__srv_id__ = uuid4().hex
+        curstate().uuid_to_server[BokehServer.__srv_id__] = srv
         srv_addr = srv.address if srv.address else socket.gethostbyname(socket.gethostname())
         BokehServer.__srv_url__ = 'http://{}:{}/'.format(srv_addr, srv.port)
         BokehServer.__bkh_srv__.start()
 
     @staticmethod
-    def open_session(new_session):
+    def open_session_backup(new_session):
         BokehServer.__logger__.debug("BokehServer.open_session <<")
         assert (isinstance(new_session, BokehSession))
         with BokehServer.__srv_lock__:
@@ -292,13 +384,16 @@ class BokehServer(object):
             session_info = {'session': new_session, 'application': None}
             BokehServer.__sessions__.appendleft(session_info)
         script = server_document(url=BokehServer.__srv_url__)
-        data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
-        metadata = {EXEC_MIME_TYPE: {"server_id": BokehServer.__srv_id__}}
-        publish_display_data(data, metadata=metadata)
+        if BokehServer.__jcontext__ == BokehServer.JupyterContext.LAB:
+            data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
+            metadata = {EXEC_MIME_TYPE: {"server_id": BokehServer.__srv_id__}}
+            publish_display_data(data, metadata=metadata)
+        else: # running in jupyter notebbok
+            display(HTML(script))
         BokehServer.__logger__.debug("BokehServer.open_session >>")
-        
+
     @staticmethod
-    def __session_entry_point(doc):
+    def __session_entry_point_backup(doc):
         try:
             BokehServer.__logger__.debug("BokehServer.session_entry_point <<")
             with BokehServer.__sessions_lock__:
@@ -315,7 +410,6 @@ class BokehServer(object):
     def close_session(session):
         BokehServer.__logger__.debug("BokehServer.close_session <<")
         assert (isinstance(session, BokehSession))
-        # TODO: is the document.clear called from the BokeSession.__cleanup is enough 
+        # TODO: is the document.clear called from the BokeSession.__cleanup is enough
         # TODO: to release every single resource associated with the session?
         BokehServer.__logger__.debug("BokehServer.close_session >>")
-
