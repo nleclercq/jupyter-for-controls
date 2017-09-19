@@ -38,6 +38,7 @@ try:
 except:
     import PyTango as tango
 
+module_logger_name = "jupytango.jupyter.notebook"
 
 # ------------------------------------------------------------------------------
 def load_ipython_extension(shell):

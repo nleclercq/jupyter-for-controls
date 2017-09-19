@@ -54,15 +54,40 @@ from tools import cell_context, CellContext, NotebookCellContent
 
 from skimage.transform import rescale
 
+
+from __future__ import print_function
+
+import datetime
+from collections import OrderedDict, deque
+from math import ceil, pi
+import six
+
+import ipywidgets as widgets
+
+import math as mt
+import numpy as np
+
+from bokeh.layouts import row, column, layout, gridplot
+from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter, Label
+from bokeh.models import widgets as BokehWidgets
+from bokeh.models.glyphs import Rect
+from bokeh.models.mappers import LinearColorMapper
+from bokeh.models.ranges import Range1d
+from bokeh.models.tools import BoxSelectTool, HoverTool, CrosshairTool
+from bokeh.models.tools import ResetTool, PanTool, BoxZoomTool
+from bokeh.models.tools import WheelZoomTool, SaveTool
+from bokeh.models.widgets.markups import Div
+from bokeh.palettes import Plasma256
+from bokeh.plotting import figure
+from bokeh.plotting.figure import Figure
+import bokeh.events
+
+from tools import *
+from session import BokehSession
+
+from skimage.transform import rescale
+
 module_logger_name = "jupytango.jupyter.plots"
-
-
-# ------------------------------------------------------------------------------
-def enum(*sequential):
-    enums = dict(zip(sequential, range(len(sequential))))
-    enums['len'] = len(sequential)
-    return type('Enum', (), enums)
-
 
 # ------------------------------------------------------------------------------
 class Children(OrderedDict):
@@ -157,19 +182,19 @@ class DataStreamEventHandler(object):
         return self._name
 
     def register_event_handler(self, event_handler, events):
-        assert(isinstance(events, (list, tuple)))
-        assert(isinstance(event_handler, DataStreamEventHandler))
+        assert (isinstance(events, (list, tuple)))
+        assert (isinstance(event_handler, DataStreamEventHandler))
         for event in events:
             if event in self.supported_events:
-                #print("{}: registering event handler {} for event {}".format(self.name, event_handler.name, event))
+                # print("{}: registering event handler {} for event {}".format(self.name, event_handler.name, event))
                 self._callbacks[event].append(event_handler)
 
     def emit(self, event):
-        assert(isinstance(event, DataStreamEvent))
+        assert (isinstance(event, DataStreamEvent))
         if event.type in self.supported_events:
             for event_handler in self._callbacks[event.type]:
                 try:
-                    #print("{}: emitting event {} towards {}".format(self.name, event.type, event_handler.name))
+                    # print("{}: emitting event {} towards {}".format(self.name, event.type, event_handler.name))
                     event_handler.__handle_stream_event(event)
                 except Exception as e:
                     print(e)
@@ -184,8 +209,8 @@ class DataStreamEventHandler(object):
             self.__propagate(event)
 
     def __propagate(self, event):
-        assert(isinstance(event, DataStreamEvent))
-        #print("{}: propagating event {} ".format(self.name, event.type))
+        assert (isinstance(event, DataStreamEvent))
+        # print("{}: propagating event {} ".format(self.name, event.type))
         self.emit(event)
 
     def emit_error(self, sd):
@@ -198,7 +223,7 @@ class DataStreamEventHandler(object):
 
     def emit_model_changed(self, model):
         evt = DataStreamEvent(DataStreamEvent.Type.MODEL_CHANGED, self.uid, model)
-        #print("{}: emitting model changed evt".format(self.name))
+        # print("{}: emitting model changed evt".format(self.name))
         self.emit(evt)
 
     def handle_stream_event(self, event):
@@ -222,7 +247,7 @@ class ChannelData(object):
         # format
         self._format = ChannelData.Format.UNKNOWN
         # data buffer (numpy ndarray)
-        self._buffer = np.zeros((1,1))
+        self._buffer = np.zeros((1, 1))
         # time buffer (numpy ndarray)
         self._time_buffer = None
         # update failed - data is invalid
@@ -281,7 +306,7 @@ class ChannelData(object):
     @buffer.setter
     def buffer(self, b):
         self._buffer = b
-    
+
     @property
     def time_buffer(self):
         return self._time_buffer
@@ -314,7 +339,6 @@ class ChannelData(object):
 
 # ------------------------------------------------------------------------------
 class DataSource(object):
-
     def __init__(self, name):
         self._name = name
 
@@ -334,7 +358,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
     """single data stream channel"""
 
     def __init__(self, name, data_sources=None, model_properties=None):
-        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
+        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
         DataStreamEventHandler.__init__(self, name)
         # associated bokeh session
         self._session = None
@@ -374,20 +398,20 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
     def set_data_source(self, ds):
         """set the channel unique data source"""
         if ds is not None:
-            assert(isinstance(ds, DataSource))
+            assert (isinstance(ds, DataSource))
             self._data_sources.clear()
             self.add_data_source(ds)
 
     def add_data_source(self, ds):
         """add the specified data source to the channel"""
         if ds is not None:
-            assert(isinstance(ds, DataSource))
+            assert (isinstance(ds, DataSource))
             self._data_sources[ds.name] = ds
 
     def add_data_sources(self, ds):
         """add the specified data source to the channel"""
         if ds is not None:
-            assert(isinstance(ds, (list, tuple)))
+            assert (isinstance(ds, (list, tuple)))
             for s in ds:
                 self.add_data_source(s)
 
@@ -415,7 +439,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
     @bokeh_session.setter
     def bokeh_session(self, bks):
         """bokeh_session"""
-        assert(isinstance(bks, BokehSession))
+        assert (isinstance(bks, BokehSession))
         self._session = bks
 
     @property
@@ -449,17 +473,17 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
         self._msg_text = text
         self._msg_cnt = 0
         self._msg_label = Label(
-                                x=70,
-                                y=70,
-                                x_units='screen',
-                                y_units='screen',
-                                text=self._msg_text,
-                                background_fill_alpha=0.0,
-                                text_font='helvetica',
-                                text_font_style='italic',
-                                text_font_size='11pt',
-                                text_color='black'
-                                )
+            x=70,
+            y=70,
+            x_units='screen',
+            y_units='screen',
+            text=self._msg_text,
+            background_fill_alpha=0.0,
+            text_font='helvetica',
+            text_font_style='italic',
+            text_font_size='11pt',
+            text_color='black'
+        )
         bkh_figure.add_layout(self._msg_label)
 
     def _animate_msg_label(self):
@@ -490,8 +514,8 @@ class BoxSelectionManager(NotebookCellContent):
     repository = dict()
 
     def __init__(self, selection_callback=None, reset_callback=None):
-        self._uid = uuid.uuid4().int
-        NotebookCellContent.__init__(self, str(self._uid), logger_name=module_logger_name)
+        self._uid = uuid4().int
+        NotebookCellContent.__init__(self, str(self._uid), logger=logging.getLogger(module_logger_name))
         BoxSelectionManager.repository[self._uid] = self
         self._selection_callback = selection_callback
         self._reset_callback = reset_callback
@@ -557,6 +581,7 @@ class BoxSelectionManager(NotebookCellContent):
             cls_name = event.__class__.__name__
             attrs = ', '.join(['{attr}={val}'.format(attr=attr, val=event.__dict__[attr]) for attr in attributes])
             print('{cls_name}({attrs})'.format(cls_name=cls_name, attrs=attrs))
+
         return python_callback
 
     def __box_selection_callback(self):
@@ -579,7 +604,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['width'][0] = width
             cds.data['height'][0] = height
             cds.change.emit()
-            var imp = "from jupytango.jupyter.plots import BoxSelectionManager;"
+            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
             var pfx = "BoxSelectionManager.repository[".concat(cds.tags[0], "].on_selection_change(")
             var arg = JSON.stringify({'x0':[x0], 'y0':[y0], 'width':[width], 'height':[height]})
             var sfx = ")"
@@ -596,7 +621,7 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['width'][0] = 0
             cds.data['height'][0] = 0
             cds.change.emit()
-            var imp = "from jupytango.jupyter.plots import BoxSelectionManager;"
+            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
             var rst = "BoxSelectionManager.repository[".concat(cds.tags[0],"].on_selection_reset()")
             var cmd  = imp.concat(rst)
             console.log(cmd)
@@ -628,25 +653,24 @@ class BoxSelectionManager(NotebookCellContent):
 
 # ------------------------------------------------------------------------------
 class InteractionsManager(object):
-    
     def __init__(self):
         self._session = None
         self._callback = None
         self._range_change_notified = False
-        
+
     def setup(self, session, figure, callback):
-        assert(isinstance(session, BokehSession))
+        assert (isinstance(session, BokehSession))
         self._session = session
         self._callback = callback
-        #figure.on_event(bokeh.events.Reset, self.__on_reset)
+        # figure.on_event(bokeh.events.Reset, self.__on_reset)
         figure.x_range.on_change('start', self.__on_range_change)
         figure.x_range.on_change('end', self.__on_range_change)
         figure.y_range.on_change('start', self.__on_range_change)
         figure.y_range.on_change('end', self.__on_range_change)
-        
+
     def __on_reset(self, event):
         self.__notify_range_change()
-        
+
     def __on_range_change(self, attr, old, new):
         self.__notify_range_change()
 
@@ -656,7 +680,7 @@ class InteractionsManager(object):
             try:
                 # -----------------------------------------------------------------------------
                 # InteractionsManager.__on_range_change is called with 'document' locked
-                # we consequently have to call the owner's handler asynchrounously so that 
+                # we consequently have to call the owner's handler asynchrounously so that
                 # it will be able to update the plot
                 # -----------------------------------------------------------------------------
                 # nb: this a tmp impl - we are waiting for the bokeh events to improve a bit...
@@ -664,7 +688,7 @@ class InteractionsManager(object):
                 self._session.timeout_callback(self._callback, 0.25)
             except Exception as e:
                 print(e)
- 
+
     def range_change_handled(self):
         self._range_change_notified = False
 
@@ -675,6 +699,7 @@ ScaleType = enum(
     'RANGE',
     'CHANNEL'
 )
+
 
 # ------------------------------------------------------------------------------
 class Scale(object):
@@ -694,7 +719,7 @@ class Scale(object):
         else:
             self._type = ScaleType.RANGE
         self._array, self._step = self.__compute_linear_space()
-        # the following will be used for linear interpolation (point coords -> pixel index) 
+        # the following will be used for linear interpolation (point coords -> pixel index)
         self._ix = self._array
         self._iy = np.linspace(0, self._array.shape[0] - 1, num=self._array.shape[0], dtype=int)
 
@@ -709,23 +734,23 @@ class Scale(object):
     @property
     def start(self):
         return self._start
-    
+
     @start.setter
     def start(self, s):
         raise Exception("Scale.start is immutable - can't change its value")
-        
+
     @property
     def end(self):
         return self._end
-    
+
     @end.setter
     def end(self, e):
         raise Exception("Scale.end is immutable - can't change its value")
-        
+
     @property
     def num_points(self):
         return self._num_points
-    
+
     @num_points.setter
     def num_points(self, np):
         raise Exception("Scale.num_points is immutable - can't change its value")
@@ -737,7 +762,7 @@ class Scale(object):
     @step.setter
     def step(self, s):
         raise Exception("Scale.step is immutable - can't change its value")
-       
+
     @property
     def label(self):
         return self._label
@@ -745,7 +770,7 @@ class Scale(object):
     @label.setter
     def label(self, label):
         self._label = label
-        
+
     @property
     def unit(self):
         return self._unit
@@ -753,7 +778,7 @@ class Scale(object):
     @unit.setter
     def unit(self, unit):
         self._unit = unit
-        
+
     @property
     def channel(self):
         return self._channel
@@ -761,7 +786,7 @@ class Scale(object):
     @channel.setter
     def channel(self, c):
         raise Exception("Scale.channel is immutable - can't change its value")
-      
+
     @property
     def array(self):
         return self._array
@@ -787,30 +812,30 @@ class Scale(object):
         if self._type != ScaleType.INDEXES:
             self.__validate_range()
             self.__validate_num_points()
-        
+
     def __validate_range(self):
         if self._start is not None and self._end is not None and self._start == self._end:
             raise ValueError("invalid axis scale: the specified 'range' is empty")
-    
+
     def __validate_num_points(self):
         if self._start is not None and self._end is not None and self._num_points is not None and self._num_points < 1:
             raise ValueError("invalid axis scale: the specified 'num_points' is invalid")
-            
+
     def __compute_linear_space(self):
         try:
-            array, step = np.linspace(float(self._start), 
-                                      float(self._end), 
+            array, step = np.linspace(float(self._start),
+                                      float(self._end),
                                       int(self._num_points),
-                                      endpoint=True, 
+                                      endpoint=True,
                                       retstep=True)
         except:
             array, step = np.zeros((0,)), 0.
         return array, step
-        
+
     def has_valid_scale(self):
         valid_range = self._start is not None and self._end is not None and self._start != self._end
         return valid_range and self._num_points is not None and self._num_points >= 1
-    
+
     def axis_label(self):
         label = self._label
         unit = self._unit
@@ -822,7 +847,7 @@ class Scale(object):
             axis_label += unit
             axis_label += ']' if len(label) else ''
         return None if not len(axis_label) else axis_label
-        
+
     def __repr__(self):
         return "scale:{} type:{} start:{} end:{} np:{} step:{} unit:{} channel:{}".format(self.label,
                                                                                           self.type,
@@ -833,9 +858,9 @@ class Scale(object):
                                                                                           self.unit,
                                                                                           self.channel)
 
+
 # ------------------------------------------------------------------------------
 class ModelHelper(object):
-
     line_colors = {
         0: 'darkblue',
         1: 'crimson',
@@ -876,10 +901,10 @@ class ScalarChannel(Channel):
         self.__reinitialize()
 
     def __reinitialize(self):
-        self._cds = None   # column data source
-        self._mdl = None   # model
-        self._lrdr = dict() # renderers (i.e. y line glyphs)
-        self._crdr = dict() # renderers (i.e. y circle glyphs)
+        self._cds = None  # column data source
+        self._mdl = None  # model
+        self._lrdr = dict()  # renderers (i.e. y line glyphs)
+        self._crdr = dict()  # renderers (i.e. y circle glyphs)
 
     def get_model(self):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
@@ -917,7 +942,7 @@ class ScalarChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        #TODO: fkwargs['output_backend'] = 'webgl'
+        # TODO: fkwargs['output_backend'] = 'webgl'
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
         fkwargs['toolbar_location'] = 'above'
@@ -950,6 +975,7 @@ class ScalarChannel(Channel):
         kwargs['legend'] = None if not show_legend else data_source + ' '
         self._crdr[data_source] = figure.circle(**kwargs)
 
+    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -982,7 +1008,7 @@ class ScalarChannel(Channel):
 
     def update(self):
         """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
-        #print('scalar channel update')
+        # print('scalar channel update')
         try:
             # get data from each channel
             min_len = 2 ** 32 - 1
@@ -990,18 +1016,18 @@ class ScalarChannel(Channel):
             previous_bad_source_cnt = self._bad_source_cnt
             self._bad_source_cnt = 0
             for sn, si in six.iteritems(self.data_sources):
-                #print("pulling data from {}...".format(sn))
+                # print("pulling data from {}...".format(sn))
                 data[sn] = sd = si.pull_data()
                 if sd.has_failed or sd.buffer is None:
                     self._bad_source_cnt += 1
                     self._animate_msg_label()
-                    #print("emitting error...")
+                    # print("emitting error...")
                     self.emit_error(sd)
                 else:
                     min_len = min(min_len, sd.buffer.shape[0])
                     self._hide_msg_label()
             if not self._bad_source_cnt and previous_bad_source_cnt:
-                #print("emitting recover...")
+                # print("emitting recover...")
                 self.emit_recover()
             updated_data = dict()
             time_scale_set = False
@@ -1036,13 +1062,13 @@ class SpectrumChannel(Channel):
         self.__reinitialize()
 
     def __reinitialize(self):
-        self._cds = None   # column data source
-        self._xsn = None   # x scale name #TODO: inject name into scale class
-        self._xsc = None   # x scale
-        self._ysc = None   # y scale
-        self._mdl = None   # model
-        self._rdr = dict() # renderers (i.e. y glyphs)
-        
+        self._cds = None  # column data source
+        self._xsn = None  # x scale name #TODO: inject name into scale class
+        self._xsc = None  # x scale
+        self._ysc = None  # y scale
+        self._mdl = None  # model
+        self._rdr = dict()  # renderers (i.e. y glyphs)
+
     def get_model(self):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._mdl
@@ -1095,7 +1121,7 @@ class SpectrumChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        #TODO: fkwargs['output_backend'] = 'webgl'
+        # TODO: fkwargs['output_backend'] = 'webgl'
         fkwargs['x_range'] = self._xsc.bokeh_range
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
@@ -1123,6 +1149,7 @@ class SpectrumChannel(Channel):
         kwargs['legend'] = None if not show_legend else y_column + ' '
         self._rdr[y_column] = bkh_figure.line(**kwargs)
 
+    @tracer
     def setup_model(self, **kwargs):
         try:
             """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
@@ -1164,7 +1191,7 @@ class SpectrumChannel(Channel):
 
     def update(self):
         """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
-        #print('spectrum channel update')
+        # print('spectrum channel update')
         if not self._mdl:
             return
         try:
@@ -1174,18 +1201,18 @@ class SpectrumChannel(Channel):
             previous_bad_source_cnt = self._bad_source_cnt
             self._bad_source_cnt = 0
             for sn, si in six.iteritems(self.data_sources):
-                #print("pulling data from {}...".format(sn))
+                # print("pulling data from {}...".format(sn))
                 data[sn] = sd = si.pull_data()
                 if sd.has_failed or sd.buffer is None:
                     self._bad_source_cnt += 1
                     self._animate_msg_label()
-                    #print("emitting error...")
+                    # print("emitting error...")
                     self.emit_error(sd)
                 else:
                     min_len = min(min_len, sd.buffer.shape[0])
                     self._hide_msg_label()
             if not self._bad_source_cnt and previous_bad_source_cnt:
-                #print("emitting recover...")
+                # print("emitting recover...")
                 self.emit_recover()
             updated_data = dict()
             if self._bad_source_cnt:
@@ -1194,7 +1221,7 @@ class SpectrumChannel(Channel):
                 self._mdl.x_range.update(start=-1, end=1)
             elif self._xsc.type == ScaleType.INDEXES:
                 updated_data[self._xsn] = np.linspace(0, min_len - 1, min_len)
-                self._mdl.x_range.update(start=0, end=min_len-1)
+                self._mdl.x_range.update(start=0, end=min_len - 1)
             elif self._xsc.type == ScaleType.RANGE:
                 end_point = self._xsc.start + (min_len - 1) * self._xsc.step
                 x_scale_data = np.linspace(self._xsc.start, end_point, min_len)
@@ -1206,7 +1233,7 @@ class SpectrumChannel(Channel):
                         raise Exception('at least one source failed!')
                     x_scale_data = data[self._xsn].buffer[:min_len]
                     updated_data[self._xsn] = x_scale_data
-                    self._mdl.x_range.update(start=x_scale_data[0], end=x_scale_data[min_len-1])
+                    self._mdl.x_range.update(start=x_scale_data[0], end=x_scale_data[min_len - 1])
                 except Exception:
                     updated_data[self._xsn] = np.zeros((min_len,), np.float)
                     self._mdl.x_range.update(start=0, end=0)
@@ -1224,9 +1251,9 @@ class SpectrumChannel(Channel):
 
     def cleanup(self):
         self.__reinitialize()
-        super(SpectrumChannel,self).cleanup()
+        super(SpectrumChannel, self).cleanup()
 
-        
+
 # ------------------------------------------------------------------------------
 class ImageChannel(Channel):
     """image data source channel"""
@@ -1236,14 +1263,14 @@ class ImageChannel(Channel):
         self.__reinitialize()
 
     def __reinitialize(self):
-        self._sd = None # last data receive from the associated source
-        self._cds = None # column data source
-        self._mdl = None # model
-        self._xsc = None # x scale
-        self._ysc = None # y scale
-        self._ird = None # image renderer
-        self._rrd = None # rect renderer for hover trick
-        self._itm = InteractionsManager() # an InteractionsManager
+        self._sd = None  # last data receive from the associated source
+        self._cds = None  # column data source
+        self._mdl = None  # model
+        self._xsc = None  # x scale
+        self._ysc = None  # y scale
+        self._ird = None  # image renderer
+        self._rrd = None  # rect renderer for hover trick
+        self._itm = InteractionsManager()  # an InteractionsManager
         self._expected_image_shape = None
         self._current_image_shape = None
         self._images_size_threshold = 100000
@@ -1309,15 +1336,15 @@ class ImageChannel(Channel):
             //console.log('x, y, z = %f, %f, %f', pxc, pxi, cds.data['z_hover'][0])
             cds.change.emit()
         """)
-                
+
     def __setup_toolbar(self, figure):
         hrd = [self._rrd]
         hcb = self.__hover_callback()
         htt = [('x,y,z:', '@x_hover{0.00},@y_hover{0.00},@z_hover{0.00}')]
         hpp = 'follow_mouse'
-        #figure.add_tools(PanTool())
+        # figure.add_tools(PanTool())
         figure.add_tools(BoxZoomTool())
-        #figure.add_tools(WheelZoomTool())
+        # figure.add_tools(WheelZoomTool())
         figure.add_tools(BoxSelectTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
@@ -1332,6 +1359,7 @@ class ImageChannel(Channel):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._mdl
 
+    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1342,23 +1370,24 @@ class ImageChannel(Channel):
             self._xsc.validate()
             self._ysc = props.get('y_scale', Scale())
             self._ysc.validate()
-            self._images_size_threshold = self.model_properties.get('images_size_threshold', self._images_size_threshold)
-            #print('ImageChannel.setup_model.images_size_threshold: {:.00f}'.format(self._images_size_threshold))
+            self._images_size_threshold = self.model_properties.get('images_size_threshold',
+                                                                    self._images_size_threshold)
+            # print('ImageChannel.setup_model.images_size_threshold: {:.00f}'.format(self._images_size_threshold))
             self._expected_image_shape = self.model_properties.get('full_frame_shape', self._expected_image_shape)
-            #print('ImageChannel.setup_model.expected_image_shape: {}'.format(self._expected_image_shape))
+            # print('ImageChannel.setup_model.expected_image_shape: {}'.format(self._expected_image_shape))
             self.__setup_undefined_scales(self._expected_image_shape)
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
-            #fkwargs['output_backend'] = 'webgl'
-            xrg = Range1d() #self._xsc.bokeh_range
-            yrg = Range1d() #self._ysc.bokeh_range
-	        #print("ImageChannel.{}:set initial x-range to ({:.04f}, {:.04f})".format(self.name, xrg.start, xrg.end))
-            #print("ImageChannel.{}:set initial y-range to ({:.04f}, {:.04f})".format(self.name, yrg.start, yrg.end))
+            # fkwargs['output_backend'] = 'webgl'
+            xrg = Range1d()  # self._xsc.bokeh_range
+            yrg = Range1d()  # self._ysc.bokeh_range
+            # print("ImageChannel.{}:set initial x-range to ({:.04f}, {:.04f})".format(self.name, xrg.start, xrg.end))
+            # print("ImageChannel.{}:set initial y-range to ({:.04f}, {:.04f})".format(self.name, yrg.start, yrg.end))
             fkwargs['x_range'] = xrg
             fkwargs['y_range'] = yrg
             fkwargs['width'] = props.get('width', 320)
             fkwargs['height'] = props.get('height', 320)
-            fkwargs['toolbar_location'] = 'right' if fkwargs['height'] >= fkwargs['width'] else 'above'
+            fkwargs['toolbar_location'] = 'right'  # if fkwargs['height'] >= fkwargs['width'] else 'above'
             fkwargs['tools'] = ""
             f = figure(**fkwargs)
             self._cds.tags = [f.ref['id']]
@@ -1399,17 +1428,17 @@ class ImageChannel(Channel):
         return self._mdl
 
     def __setup_undefined_scales(self, img_shape, force=False):
-        #print("__setup_undefined_scales.img_shape: {}".format(img_shape))
+        # print("__setup_undefined_scales.img_shape: {}".format(img_shape))
         if img_shape is None:
             return
-        #print("__setup_undefined_scales._xsc.has_valid_scale: {}".format(self._xsc.has_valid_scale()))
+        # print("__setup_undefined_scales._xsc.has_valid_scale: {}".format(self._xsc.has_valid_scale()))
         if force or not self._xsc.has_valid_scale():
             skwargs = dict()
             skwargs['start'] = 0
             skwargs['end'] = img_shape[1] - 1
             skwargs['num_points'] = img_shape[1]
             self._xsc = Scale(**skwargs)
-        #print("__setup_undefined_scales._ysc.has_valid_scale: {}".format(self._ysc.has_valid_scale()))
+        # print("__setup_undefined_scales._ysc.has_valid_scale: {}".format(self._ysc.has_valid_scale()))
         if force or not self._ysc.has_valid_scale():
             skwargs = dict()
             skwargs['start'] = 0
@@ -1422,8 +1451,8 @@ class ImageChannel(Channel):
             sd = self._sd
             if not sd or sd.has_failed or not sum(sd.buffer.shape):
                 return
-            #print("ImageChannel.{}:handle_range_change: x-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.x_range.start, self._mdl.x_range.end))
-            #print("ImageChannel.{}:handle_range_change: y-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.y_range.start, self._mdl.y_range.end))
+            # print("ImageChannel.{}:handle_range_change: x-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.x_range.start, self._mdl.x_range.end))
+            # print("ImageChannel.{}:handle_range_change: y-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.y_range.start, self._mdl.y_range.end))
             image = self.__extract_image_for_current_ranges(sd.buffer)
             new_data = dict()
             new_data['image'] = [image]
@@ -1435,7 +1464,7 @@ class ImageChannel(Channel):
                                    dw=abs(self._mdl.x_range.end - self._mdl.x_range.start),
                                    dh=abs(self._mdl.y_range.end - self._mdl.y_range.start))
         except Exception as e:
-            print(e)
+            self.error(e)
         finally:
             self._itm.range_change_handled()
 
@@ -1447,32 +1476,32 @@ class ImageChannel(Channel):
         xec = self._mdl.x_range.end
         xx = np.linspace(self._xsc.start, self._xsc.end, num=image.shape[1], dtype=float)
         xy = np.linspace(0, image.shape[1] - 1, num=image.shape[1], dtype=int)
-        #print("__extract_image_for_current_ranges.2")
+        # print("__extract_image_for_current_ranges.2")
         ysc = self._mdl.y_range.start
         yec = self._mdl.y_range.end
-        #print("extract_image_for_current_ranges: x:({:.04f}, {:.04f}) - y:({:.04f} -> {:.04f})".format(xsc, xec, ysc, yec))
+        # print("extract_image_for_current_ranges: x:({:.04f}, {:.04f}) - y:({:.04f} -> {:.04f})".format(xsc, xec, ysc, yec))
         yx = np.linspace(self._ysc.start, self._ysc.end, num=image.shape[0], dtype=float)
         yy = np.linspace(0, image.shape[0] - 1, num=image.shape[0], dtype=int)
         xsi = int(mt.floor(np.interp(xsc, xx, xy)))
         xei = int(mt.ceil(np.interp(xec, xx, xy)) + 1)
         ysi = int(mt.floor(np.interp(ysc, yx, yy)))
         yei = int(mt.ceil(np.interp(yec, yx, yy)) + 1)
-        #print("extract_image_for_current_ranges: x:[{:.00f} -> {:.00f}] - y:[{:.00f} -> {:.00f}]".format(xsi, xei, ysi, yei))
+        # print("extract_image_for_current_ranges: x:[{:.00f} -> {:.00f}] - y:[{:.00f} -> {:.00f}]".format(xsi, xei, ysi, yei))
         image = image[ysi:yei, xsi:xei]
-        #print("extract_image_for_current_ranges.sub_image.shape: {}".format(image.shape))
+        # print("extract_image_for_current_ranges.sub_image.shape: {}".format(image.shape))
         need_rescale, rescaling_factor = self.__compute_rescaling_factor(image)
         if need_rescale:
             image = self.__rescale_image(image, rescaling_factor)
-            #print("extract_image_for_current_ranges.sub_image.rescaled to {}".format(image.shape))
+            # print("extract_image_for_current_ranges.sub_image.rescaled to {}".format(image.shape))
         return image
 
     def __compute_rescaling_factor(self, image):
         try:
             rescaling_factor = 1.0
             initial_image_size = image_size = image.shape[0] * image.shape[1]
-            #print("compute_rescaling_factor: size: {:.04f} - threshold: {:.04f}".format(image_size, image_size_threshold))
+            # print("compute_rescaling_factor: size: {:.04f} - threshold: {:.04f}".format(image_size, image_size_threshold))
             if image_size <= self._images_size_threshold:
-                #print("compute_rescaling_factor: no rescaling required")
+                # print("compute_rescaling_factor: no rescaling required")
                 return False, rescaling_factor
             for inc in [0.1, 0.01, 0.001, 0.0001]:
                 while image_size > self._images_size_threshold:
@@ -1481,15 +1510,15 @@ class ImageChannel(Channel):
                 rescaling_factor += inc
                 image_size = int(initial_image_size * rescaling_factor)
             rescaling_factor = mt.sqrt(rescaling_factor)
-            #print("compute_rescaling_factor.rescaling factor: {:.04f}".format(rescaling_factor))
+            # print("compute_rescaling_factor.rescaling factor: {:.04f}".format(rescaling_factor))
             return True, rescaling_factor
         except Exception as e:
             print(e)
 
     def __rescale_image(self, in_img, rescaling_factor):
-        #print('rescale-image: in shape {}'.format(in_img.shape))
+        # print('rescale-image: in shape {}'.format(in_img.shape))
         out_img = rescale(in_img, rescaling_factor, mode='constant', cval=np.nan)
-        #print('rescale-image: out shape {}'.format(out_img.shape))
+        # print('rescale-image: out shape {}'.format(out_img.shape))
         return out_img
 
     def update(self, update_image=True):
@@ -1511,7 +1540,7 @@ class ImageChannel(Channel):
             empty_buffer = sd.has_failed or not all(sd.buffer.shape)
             nan_buffer = None
             if empty_buffer:
-                nan_buffer = np.empty((2,2))
+                nan_buffer = np.empty((2, 2))
                 nan_buffer.fill(np.nan)
                 self._animate_msg_label()
             else:
@@ -1523,9 +1552,9 @@ class ImageChannel(Channel):
                 self.__setup_undefined_scales(sd.buffer.shape)
             if empty_buffer:
                 xss = -1.
-                xse =  1.
-                xst =  1.
-                xpn =  3
+                xse = 1.
+                xst = 1.
+                xpn = 3
             elif self._xsc.type != ScaleType.INDEXES:
                 xss = self._xsc.start
                 if self._expected_image_shape is None:
@@ -1541,9 +1570,9 @@ class ImageChannel(Channel):
                 xpn = sd.buffer.shape[1]
             if empty_buffer:
                 yss = -1.
-                yse =  1.
-                yst =  1.
-                ypn =  3
+                yse = 1.
+                yst = 1.
+                ypn = 3
             elif self._ysc.type != ScaleType.INDEXES:
                 yss = self._ysc.start
                 if self._expected_image_shape is None:
@@ -1561,13 +1590,13 @@ class ImageChannel(Channel):
             h = abs(yse - yss)
             if not w:
                 xss = -1.
-                xse =  1.
+                xse = 1.
             if not h:
                 yss = -1.
-                yse =  1.
-            if image_shape_changed and not empty_buffer: #TODO: remove 'and not empty_buffer'
-                #print("ImageChannel.{}:changing x-range to ({:.04f}, {:.04f})".format(self.name, xss, xse))
-                #print("ImageChannel.{}:changing y-range to ({:.04f}, {:.04f})".format(self.name, yss, yse))
+                yse = 1.
+            if image_shape_changed and not empty_buffer:  # TODO: remove 'and not empty_buffer'
+                # print("ImageChannel.{}:changing x-range to ({:.04f}, {:.04f})".format(self.name, xss, xse))
+                # print("ImageChannel.{}:changing y-range to ({:.04f}, {:.04f})".format(self.name, yss, yse))
                 self._mdl.x_range.update(start=xss, end=xse)
                 self._mdl.y_range.update(start=yss, end=yse)
                 self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
@@ -1578,7 +1607,7 @@ class ImageChannel(Channel):
                 dw = abs(self._mdl.x_range.end - self._mdl.x_range.start)
                 dh = abs(self._mdl.y_range.end - self._mdl.y_range.start)
                 self._ird.glyph.update(x=x, y=y, dw=dw, dh=dh)
-                self._rrd.glyph.update(x=x + dw/2, y=y + dh/2, width=dw, height=dh)
+                self._rrd.glyph.update(x=x + dw / 2, y=y + dh / 2, width=dw, height=dh)
             if not empty_buffer:
                 image = self.__extract_image_for_current_ranges(sd.buffer)
             else:
@@ -1595,7 +1624,6 @@ class ImageChannel(Channel):
                 new_data['image_shape_changed'] = [0]
             self._cds.data.update(new_data)
         except Exception as e:
-            print(e)
             self.error(e)
 
     def cleanup(self):
@@ -1610,13 +1638,14 @@ class GenericChannel(Channel):
     def __init__(self, name, data_source=None, model_properties=dict()):
         Channel.__init__(self, name, data_sources=[data_source], model_properties=model_properties)
         self._delegate = None
-        self._delegate_model_id = str(uuid.uuid4())
+        self._delegate_model_id = str(uuid4())
         self._delegate_model = None
 
     def get_model(self):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._delegate_model
 
+    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1644,17 +1673,17 @@ class GenericChannel(Channel):
                 self.emit_recover()
             self.model_properties['uid'] = self.uid
             if sd.format == ChannelData.Format.SCALAR:
-                #print("GenericChannel.update.instanciating SCALAR channel")
+                # print("GenericChannel.update.instanciating SCALAR channel")
                 self._delegate = ScalarChannel(name=self.name,
                                                data_sources=[self.data_source],
                                                model_properties=self.model_properties)
             elif sd.format == ChannelData.Format.SPECTRUM:
-                #print("GenericChannel.update.instanciating SPECTRUM channel")
+                # print("GenericChannel.update.instanciating SPECTRUM channel")
                 self._delegate = SpectrumChannel(name=self.name,
                                                  data_sources=[self.data_source],
                                                  model_properties=self.model_properties)
             elif sd.format == ChannelData.Format.IMAGE:
-                #print("GenericChannel.update.instanciating IMAGE channel")
+                # print("GenericChannel.update.instanciating IMAGE channel")
                 self._delegate = ImageChannel(name=self.name,
                                               data_source=self.data_source,
                                               model_properties=self.model_properties)
@@ -1711,7 +1740,7 @@ class LayoutChannel(Channel):
         """called when a sub-channel is added to this channel"""
         if channel is not self:
             channel.context = self.context
-            events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER,  DataStreamEvent.Type.MODEL_CHANGED]
+            events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
             channel.register_event_handler(self, events)
 
     def handle_stream_event(self, event):
@@ -1727,7 +1756,7 @@ class LayoutChannel(Channel):
                     self._layout.children.remove(c)
                     self._layout.children.append(event.data)
         """
-        #TODO: handle DataStreamEvent.Type.MODEL_CHANGED
+        # TODO: handle DataStreamEvent.Type.MODEL_CHANGED
         pass
 
     @property
@@ -1738,26 +1767,26 @@ class LayoutChannel(Channel):
     @classmethod
     def __model_width(cls, model):
         if hasattr(model, 'plot_width'):
-            #print("model_width:plot_width={}".format(model.plot_width))
+            # print("model_width:plot_width={}".format(model.plot_width))
             w = model.plot_width
         elif hasattr(model, 'width'):
-            #print("model_width:width={}".format(model.width))
+            # print("model_width:width={}".format(model.width))
             w = model.width
         else:
-            #print("model_width:width=six.MAXSIZE={}".format(six.MAXSIZE))
+            # print("model_width:width=six.MAXSIZE={}".format(six.MAXSIZE))
             w = six.MAXSIZE
         return w
 
     @classmethod
     def __model_height(cls, model):
         if hasattr(model, 'plot_height'):
-            #print("model_width:plot_height={}".format(model.plot_height))
+            # print("model_width:plot_height={}".format(model.plot_height))
             h = model.plot_height
         elif hasattr(model, 'height'):
-            #print("model_width:height={}".format(model.height))
+            # print("model_width:height={}".format(model.height))
             h = model.height
         else:
-            #print("model_width:height=six.MAXSIZE={}".format(six.MAXSIZE))
+            # print("model_width:height=six.MAXSIZE={}".format(six.MAXSIZE))
             h = six.MAXSIZE
         return h
 
@@ -1775,7 +1804,7 @@ class LayoutChannel(Channel):
         """spread the children in rows"""
         try:
             num_columns, width_sum = 1, 0
-            #print("setup_grid_layout: images layout contains {} children".format(len(children)))
+            # print("setup_grid_layout: images layout contains {} children".format(len(children)))
             for c in children.values():
                 width_sum += self.__model_width(c)
                 if width_sum <= 600:
@@ -1783,7 +1812,7 @@ class LayoutChannel(Channel):
                 else:
                     break
             num_rows = int(ceil(float(len(children)) / float(num_columns)))
-            #print("num_columns={} - num_rows={}".format(num_columns, num_rows))
+            # print("num_columns={} - num_rows={}".format(num_columns, num_rows))
             rl = list()
             for i in range(num_rows):
                 rl.append([None for i in range(num_columns)])
@@ -1824,6 +1853,7 @@ class LayoutChannel(Channel):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
         return self._mdl
 
+    @tracer
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
         try:
@@ -1843,9 +1873,7 @@ class LayoutChannel(Channel):
     def __update_tabs_selection(self):
         # TODO: we might face a race condition between server periodic callback and user action: mutex required?
         at = self._tabs_widget.active
-        self.debug('LayoutChannel.update_tabs_selection: selection id is {}'.format(at))
         cn = self._tabs_widget.tabs[at].title
-        self.debug('LayoutChannel.update_tabs_selection: selection name is {}'.format(cn))
         self._channels[cn].update()
 
     def update(self):
@@ -1864,7 +1892,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
     """data stream interface"""
 
     def __init__(self, name, channels=None):
-        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
+        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
         DataStreamEventHandler.__init__(self, name)
         # bokeh session
         self._session = None
@@ -1872,7 +1900,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         self._channels = Children(self, Channel)
         self._channels.register_add_callback(self._on_add_channel)
         self.add(channels)
-        
+
     @property
     def bokeh_session(self):
         """return the associated bokeh session"""
@@ -1926,7 +1954,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
 
     def update(self):
         """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
-        #print("data stream: {} update".format(self.name))
+        # print("data stream: {} update".format(self.name))
         for channel in self._channels.values():
             try:
                 channel.update()
@@ -1949,7 +1977,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
 
     def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0.):
         # route output to current cell
-        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
+        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
         DataStreamEventHandler.__init__(self, name)
         BokehSession.__init__(self)
         # a FIFO to store incoming DataStreamEvent
@@ -1997,17 +2025,20 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         else:
             raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
 
+    @tracer
     def open(self):
         """open the session and optionally start it """
         super(DataStreamer, self).open()
 
+    @tracer
     def close(self):
         """close the session"""
-        # suspend periodic callback 
+        # suspend periodic callback
         self.pause()
         # the underlying actions will be performed under critical section
         self.safe_document_modifications(self.__close)
 
+    @tracer
     def __close(self):
         """close/cleanup everything"""
         # cleanup each data stream
@@ -2023,8 +2054,9 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
             super(DataStreamer, self).close()
         except Exception as e:
             self.error(e)
-        self.debug("DataStreamer: Bokeh session closed")
+            self.debug("DataStreamer: Bokeh session closed")
 
+    @tracer
     def start(self, delay=0.):
         """start periodic activity"""
         if not self.ready:
@@ -2040,6 +2072,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
                 self.debug("DataStreamer.start: session ready, no delay, resuming...")
                 self.resume()
 
+    @tracer
     def stop(self):
         """stop periodic activity"""
         if not self.ready:
@@ -2047,8 +2080,10 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         else:
             self.pause()
 
+    @tracer
     def setup_document(self):
         """add the data stream models to the bokeh document"""
+        self.debug("DataStreamer.setup_document <<")
         try:
             models = list()
             for ds in self._data_streams:
@@ -2063,35 +2098,36 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
             try:
                 for model in models:
                     self.document.add_root(model, setter=self.bokeh_session_id)
+                if self._auto_start:
+                    self.start(self._start_delay)
             except Exception as e:
                 self.error(e)
-            if self._auto_start:
-                self.start(self._start_delay)
         except Exception as e:
             self.error(e)
             raise
+        self.debug("DataStreamer.setup_document >>")
 
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
         if event.type == DataStreamEvent.Type.MODEL_CHANGED:
-            self._events.appendleft(event) 
+            self._events.appendleft(event)
             self.safe_document_modifications(self.__on_model_changed)
 
     def __on_model_changed(self):
-        event = self._events.pop() 
+        event = self._events.pop()
         if event.emitter and event.data:
-            self.debug("handling DataStreamEvent.Type.MODEL_CHANGED")
+            # print("handling DataStreamEvent.Type.MODEL_CHANGED")
             if len(self.document.roots):
                 for root in self.document.roots:
                     if root.name == str(event.emitter):
-                        self.debug("removing figure {}".format(root.name))
+                        # print("removing figure {}".format(root.name))
                         self.document.remove_root(root)
             try:
-                self.debug("adding new root {}:{} to document".format(event.data, event.data.name))
+                # print("adding new root {}:{} to document".format(event.data, event.data.name))
                 self.document.add_root(event.data, setter=self.bokeh_session_id)
             except Exception as e:
                 self.error(e)
-            self.debug("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
+                # print("DataStreamEvent.Type.MODEL_CHANGED successfully handled")
 
     @property
     def update_period(self):
@@ -2120,7 +2156,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # check input parameters
         assert (isinstance(data_streamer, DataStreamer))
         # route output to current cell
-        NotebookCellContent.__init__(self, name, logger_name=module_logger_name)
+        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
         DataStreamEventHandler.__init__(self, name)
         # data streamer
         self.data_streamer = data_streamer
@@ -2170,7 +2206,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         bd = "Freeze" if kwargs.get('auto_start', True) else "Unfreeze"
         self._freeze_unfreeze_button = widgets.Button(description=bd, layout=self.l01a(width="100px"))
         self._freeze_unfreeze_button.on_click(self.__on_freeze_unfreeze_clicked)
-        self._close_button = widgets.Button(description="Close",layout=self.l01a(width="100px"))
+        self._close_button = widgets.Button(description="Close", layout=self.l01a(width="100px"))
         self._close_button.on_click(self.__on_close_clicked)
         self._switch_buttons_to_valid_state()
         wigets_list = list()
@@ -2220,7 +2256,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self.__call_close_callbacks()
 
     def register_close_callback(self, cb):
-        assert(hasattr(cb, '__call__'))
+        assert (hasattr(cb, '__call__'))
         self._close_callbacks.append(cb)
 
     def __call_close_callbacks(self):
@@ -2231,7 +2267,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
                 pass
 
     def handle_stream_event(self, event):
-        assert(isinstance(event, DataStreamEvent))
+        assert (isinstance(event, DataStreamEvent))
         if event.type == DataStreamEvent.Type.ERROR:
             self.__on_stream_error(event)
         elif event.type == DataStreamEvent.Type.RECOVER:
@@ -2270,7 +2306,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
                 else:
                     self._error_area.value = err
         except Exception as e:
-            print(e)
+            self.error(e)
             raise
 
     def _hide_error(self):
@@ -2296,3 +2332,4 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # register event handler
         events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
         self._data_streamer.register_event_handler(self, events)
+

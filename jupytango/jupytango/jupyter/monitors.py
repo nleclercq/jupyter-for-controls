@@ -35,9 +35,8 @@ except:
 from jupytango.tools.tango.TangoEventsConsumer import TangoEventSubscriptionForm, TangoEventsConsumer
 from jupytango.jupyter.plots import *
 
-# ------------------------------------------------------------------------------
-fs_logger = logging.getLogger('jupytango.jupyter.monitors')
-
+module_logger_name = "jupytango.jupyter.monitors"
+module_logger = logging.getLogger(module_logger_name)
 
 # ------------------------------------------------------------------------------
 class RingBuffer(np.ndarray):
@@ -461,23 +460,23 @@ class GenericMonitor(Monitor):
         # close  existing monitor (if any)
         for mn, mi in iteritems(monitors):
             if mi.attribute_name == fqan:
-                fs_logger.debug("Monitor[{}] exist".format(fqan))
+                module_logger.debug("Monitor[{}] exist".format(fqan))
                 try:
-                    fs_logger.debug("closing Monitor[{}]...".format(fqan))
+                    module_logger.debug("closing Monitor[{}]...".format(fqan))
                     mi.close()
-                    fs_logger.debug("Monitor[{}] successfully closed".format(fqan))
+                    module_logger.debug("Monitor[{}] successfully closed".format(fqan))
                 except:
-                    fs_logger.debug("failed to close Monitor[{}]".format(fqan))
+                    module_logger.debug("failed to close Monitor[{}]".format(fqan))
                     pass
                 break
         # instanciate the Monitor
         try:
-            fs_logger.debug("instanciating Monitor for {}".format(fqan))
+            module_logger.debug("instanciating Monitor for {}".format(fqan))
             m = GenericMonitor(**kwargs)
             monitors[m._uid] = m
-            fs_logger.debug("Monitor successfully instanciated")
+            module_logger.debug("Monitor successfully instanciated")
         except Exception as e:
-            fs_logger.error(e)
+            module_logger.error(e)
             raise
 
     def __init__(self, **kwargs):

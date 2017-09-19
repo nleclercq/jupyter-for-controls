@@ -20,6 +20,7 @@
 """jupytango"""
 
 from __future__ import print_function
+import os
 import logging
 import time
 import sys
@@ -27,6 +28,31 @@ from contextlib import wraps, contextmanager
 from uuid import uuid4
 from IPython import get_ipython
 from IPython.display import display, clear_output
+
+
+# ------------------------------------------------------------------------------
+def enum(*sequential):
+    enums = dict(zip(sequential, range(len(sequential))))
+    enums['len'] = len(sequential)
+    return type('Enum', (), enums)
+
+
+# ------------------------------------------------------------------------------
+JupyterContext = enum('LAB', 'NOTEBOOK')
+
+
+# ------------------------------------------------------------------------------
+def get_jupyter_context():
+    try:
+        jcv = os.environ['JUPYTER_CONTEXT']
+        if jcv.upper() not in ['LAB', 'NOTEBOOK']:
+            raise KeyError()
+        jc = JupyterContext.LAB if jcv.upper() == 'LAB' else JupyterContext.NOTEBOOK
+    except KeyError:
+        print("warning: JUPYTER_CONTEXT env. var. not set or has invalid value!")
+        print("warning: using default JUPYTER_CONTEXT value 'LAB'  [possible values: LAB, NOTEBOOK]")
+        jc = JupyterContext.LAB
+    return jc
 
 
 # ------------------------------------------------------------------------------
@@ -62,7 +88,7 @@ def tracer(fn):
     @wraps(fn)
     def wrapper(self, *args, **kwargs):
         t0 = time.time()
-        name = self.name if hasattr(self, 'name') else ''
+        name = '.{}'.format(self.name) if hasattr(self, 'name') else ''
         if len(name) > 5:
             name = name[-5:]
         qualified_name = "{}.{}.{}".format(self.__class__.__name__, fn.__name__, name)
@@ -74,17 +100,17 @@ def tracer(fn):
         finally:
             dt = 1000 * (time.time() - t0)
             debug_trace(self, "{} out>> [took: {:.2f} ms]".format(qualified_name, dt))
+
     return wrapper
 
 
 # ------------------------------------------------------------------------------
 class CellContext(object):
-    
     def __init__(self):
         k = get_ipython().kernel
         self._ident = k._parent_ident
         self._header = k._parent_header
-        
+
     def __call__(self):
         return (self._ident, self._header)
 
@@ -93,7 +119,7 @@ class CellContext(object):
 @contextmanager
 def cell_context(context):
     try:
-        assert(isinstance(context, CellContext))
+        assert (isinstance(context, CellContext))
         kernel = get_ipython().kernel
         save_context = (kernel._parent_ident, kernel._parent_header)
         sys.stdout.flush()
@@ -114,21 +140,33 @@ def cell_context(context):
 
 # ------------------------------------------------------------------------------
 class NotebookCellContent(object):
+    default_logger = "fs.client.jupyter"
 
-    default_logger = "jupytango.jupyter"
+    class DoNothingOutput(object):
+        def __enter__(self):
+            pass
 
-    '''
-    try:
-        h = logging.getLogger(default_logger).handlers[0]
-    except IndexError:
-        logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
-    '''
+        def __exit__(self, etype, evalue, tb):
+            return True
 
-    def __init__(self, name, logger_name=None):
-        self._name = name
-        self._uid = uuid4().int
+    def __init__(self, name=None, logger=None):
+        uuid = uuid4()
+        self._uid = uuid.int
+        self._name = name if name is not None else str(uuid)
         self._context = CellContext()
-        self._logger = logging.getLogger(NotebookCellContent.default_logger if logger_name is None else logger_name)
+        self._logger = logger if logger is not None else logging.getLogger(NotebookCellContent.default_logger)
+        self._out = None
+        if get_jupyter_context() == JupyterContext.LAB:
+            from ipywidgets import Output
+            self._out = Output()
+        else:
+            self._out = NotebookCellContent.DoNothingOutput()
+        '''
+        try:
+            h = self._logger.handlers[0]
+        except IndexError:
+            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.DEBUG)
+        '''
 
     @property
     def name(self):
@@ -149,7 +187,7 @@ class NotebookCellContent(object):
     def display(self, widgets_layout):
         with cell_context(self._context):
             display(widgets_layout)
-       
+
     def clear_output(self):
         with cell_context(self._context):
             clear_output()
@@ -158,13 +196,23 @@ class NotebookCellContent(object):
     def logger(self):
         return self._logger
 
+    @logger.setter
+    def logger(self, l):
+        self._logger = l
+
     def set_logging_level(self, level):
         self._logger.setLevel(level)
 
+    def print_to_cell(self, *args):
+        self.print(*args)
+
     def print(self, *args):
         with cell_context(self._context):
-            print(*args)
-            
+            try:
+                self._logger.print(*args)
+            except:
+                print(*args)
+
     def debug(self, msg, *args, **kwargs):
         with cell_context(self._context):
             self._logger.debug(msg, *args, **kwargs)
