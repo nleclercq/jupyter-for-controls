@@ -17,8 +17,6 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""jupytango"""
-
 from __future__ import print_function
 
 import datetime
@@ -51,7 +49,7 @@ from session import BokehSession
 
 from skimage.transform import rescale
 
-module_logger_name = "jupytango.jupyter.plots"
+module_logger_name = "fs.client.jupyter.plots"
 
 # ------------------------------------------------------------------------------
 class Children(OrderedDict):
@@ -1334,8 +1332,7 @@ class ImageChannel(Channel):
             self._xsc.validate()
             self._ysc = props.get('y_scale', Scale())
             self._ysc.validate()
-            self._images_size_threshold = self.model_properties.get('images_size_threshold',
-                                                                    self._images_size_threshold)
+            self._images_size_threshold = self.model_properties.get('images_size_threshold', self._images_size_threshold)
             # print('ImageChannel.setup_model.images_size_threshold: {:.00f}'.format(self._images_size_threshold))
             self._expected_image_shape = self.model_properties.get('full_frame_shape', self._expected_image_shape)
             # print('ImageChannel.setup_model.expected_image_shape: {}'.format(self._expected_image_shape))

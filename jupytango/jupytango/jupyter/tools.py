@@ -17,8 +17,6 @@
 #  along with This.  If not, see <http://www.gnu.org/licenses/>.
 # ===========================================================================
 
-"""jupytango"""
-
 from __future__ import print_function
 import os
 import logging
@@ -154,12 +152,6 @@ class NotebookCellContent(object):
         self._name = name if name is not None else str(uuid)
         self._context = CellContext()
         self._logger = logger if logger is not None else logging.getLogger(NotebookCellContent.default_logger)
-        self._out = None
-        if get_jupyter_context() == JupyterContext.LAB:
-            from ipywidgets import Output
-            self._out = Output()
-        else:
-            self._out = NotebookCellContent.DoNothingOutput()
         try:
             h = self._logger.handlers[0]
         except IndexError:
