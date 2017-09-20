@@ -21,42 +21,6 @@
 
 from __future__ import print_function
 
-import six
-import uuid
-import datetime
-from collections import OrderedDict, deque
-from math import ceil, pi
-
-import ipywidgets as widgets
-
-import math as mt
-import numpy as np
-
-from IPython.display import display
-
-from bokeh.layouts import column, layout, gridplot
-from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter, Label
-from bokeh.models import widgets as BokehWidgets
-from bokeh.models.glyphs import Rect
-from bokeh.models.mappers import LinearColorMapper
-from bokeh.models.ranges import Range1d
-from bokeh.models.tools import BoxSelectTool, HoverTool, CrosshairTool
-from bokeh.models.tools import ResetTool, PanTool, BoxZoomTool
-from bokeh.models.tools import WheelZoomTool, SaveTool
-from bokeh.models.widgets.markups import Div
-from bokeh.palettes import Plasma256
-from bokeh.plotting import figure
-from bokeh.plotting.figure import Figure
-import bokeh.events
-
-from session import BokehSession
-from tools import cell_context, CellContext, NotebookCellContent
-
-from skimage.transform import rescale
-
-
-from __future__ import print_function
-
 import datetime
 from collections import OrderedDict, deque
 from math import ceil, pi
@@ -514,7 +478,7 @@ class BoxSelectionManager(NotebookCellContent):
     repository = dict()
 
     def __init__(self, selection_callback=None, reset_callback=None):
-        self._uid = uuid4().int
+        self._uid = uuid4().hex
         NotebookCellContent.__init__(self, str(self._uid), logger=logging.getLogger(module_logger_name))
         BoxSelectionManager.repository[self._uid] = self
         self._selection_callback = selection_callback
@@ -1638,7 +1602,7 @@ class GenericChannel(Channel):
     def __init__(self, name, data_source=None, model_properties=dict()):
         Channel.__init__(self, name, data_sources=[data_source], model_properties=model_properties)
         self._delegate = None
-        self._delegate_model_id = str(uuid4())
+        self._delegate_model_id = str(uuid4().hex)
         self._delegate_model = None
 
     def get_model(self):
@@ -2051,7 +2015,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         self.debug("DataStreamer: closing Bokeh session...")
         # delegate the remaining actions to our super class (this is mandatory)
         try:
-            super(DataStreamer, self).close()
+            super(DataStreamer, self).cleanup(async=False)
         except Exception as e:
             self.error(e)
             self.debug("DataStreamer: Bokeh session closed")

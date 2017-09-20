@@ -39,9 +39,6 @@ from tools import JupyterContext, get_jupyter_context
 
 module_logger_name = "jupytango.jupyter.session"
 
-logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.DEBUG)
-
-
 # ------------------------------------------------------------------------------
 class BokehSessionHandler(Handler):
     def on_server_loaded(self, server_context):
@@ -69,7 +66,7 @@ class BokehSession(object):
 
     def __init__(self, uuid=None):
         # session identifier
-        self._uuid = uuid if uuid else str(uuid4())
+        self._uuid = uuid if uuid else str(uuid4().hex)
         # the session info
         self._info = None
         # the associated bokeh document (for experts only)
@@ -153,17 +150,24 @@ class BokehSession(object):
     def callback_period(self, ucbp):
         """set the (periodic) callback period in seconds or None to disable the callback"""
         self._callback_period = max(0.1, ucbp) if ucbp is not None else None
-
+    
     def open(self):
         """open the session"""
         BokehServer.open_session(self)
 
-    def close(self):
+    def close(self, async=True):
         """close the session"""
-        # TODO: async close required but might not be safe!
-        self.pause()
-        self.safe_document_modifications(self.__cleanup)
+        self.cleanup(async)
 
+    def cleanup(self, async=True):
+        """cleanup the session"""
+        # TODO: async cleanup required but might not be safe!
+        self.pause()
+        if async:
+            self.safe_document_modifications(self.__cleanup)
+        else:
+            self.__cleanup()
+        
     def __cleanup(self):
         """asynchronous close"""
         # TODO: async close required but might not be safe!
@@ -260,6 +264,7 @@ class BokehSession(object):
 
 # ------------------------------------------------------------------------------
 class BokehServer(object):
+    #TODO: cleanup the code
     __bkh_srv__ = None
     __srv_url__ = None
     __srv_id__ = None

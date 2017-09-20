@@ -91,7 +91,7 @@ def tracer(fn):
         name = '.{}'.format(self.name) if hasattr(self, 'name') else ''
         if len(name) > 5:
             name = name[-5:]
-        qualified_name = "{}.{}.{}".format(self.__class__.__name__, fn.__name__, name)
+        qualified_name = "{}.{}{}".format(self.__class__.__name__, fn.__name__, name)
         debug_trace(self, "{} <<in".format(qualified_name))
         try:
             return fn(self, *args, **kwargs)
@@ -145,13 +145,12 @@ class NotebookCellContent(object):
     class DoNothingOutput(object):
         def __enter__(self):
             pass
-
         def __exit__(self, etype, evalue, tb):
             return True
 
     def __init__(self, name=None, logger=None):
-        uuid = uuid4()
-        self._uid = uuid.int
+        uuid = uuid4().hex
+        self._uid = uuid
         self._name = name if name is not None else str(uuid)
         self._context = CellContext()
         self._logger = logger if logger is not None else logging.getLogger(NotebookCellContent.default_logger)
@@ -161,12 +160,10 @@ class NotebookCellContent(object):
             self._out = Output()
         else:
             self._out = NotebookCellContent.DoNothingOutput()
-        '''
         try:
             h = self._logger.handlers[0]
         except IndexError:
             logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.DEBUG)
-        '''
 
     @property
     def name(self):
