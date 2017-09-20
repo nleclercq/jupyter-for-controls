@@ -264,7 +264,7 @@ class BokehSession(object):
 
 # ------------------------------------------------------------------------------
 class BokehServer(object):
-    #TODO: cleanup the code!
+    #TODO: cleanup the code
     
     __bkh_srv__ = None
     __srv_url__ = None
