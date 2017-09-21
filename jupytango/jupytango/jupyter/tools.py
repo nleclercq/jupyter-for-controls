@@ -137,14 +137,23 @@ def cell_context(context):
 
 
 # ------------------------------------------------------------------------------
+class FakeOutput(object):
+    def clear_output(self):
+        pass
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, etype, evalue, tb):
+        return False
+
+
+# ------------------------------------------------------------------------------
 class NotebookCellContent(object):
     default_logger = "fs.client.jupyter"
-
-    class DoNothingOutput(object):
-        def __enter__(self):
-            pass
-        def __exit__(self, etype, evalue, tb):
-            return True
 
     def __init__(self, name=None, logger=None):
         uuid = uuid4().hex
@@ -156,6 +165,8 @@ class NotebookCellContent(object):
             h = self._logger.handlers[0]
         except IndexError:
             logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.DEBUG)
+        except:
+            pass
 
     @property
     def name(self):
