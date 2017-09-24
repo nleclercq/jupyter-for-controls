@@ -76,7 +76,8 @@ class BokehSession(object):
         # is this session closed?
         self._closed = False
         # close existing session: this is a way to avoid leaks & resources waste
-        self.__close_existing_session(self._uuid)
+        if uuid is not None:
+            self.__close_existing_session(uuid)
         # insert new session into the repo
         with BokehSession.__repo_lock__:
             BokehSession.__repo__[self._uuid] = self

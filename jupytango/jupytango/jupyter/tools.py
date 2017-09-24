@@ -26,6 +26,7 @@ from contextlib import wraps, contextmanager
 from uuid import uuid4
 from IPython import get_ipython
 from IPython.display import display, clear_output
+import ipywidgets as ipw
 
 
 # ------------------------------------------------------------------------------

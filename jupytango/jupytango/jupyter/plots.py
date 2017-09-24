@@ -24,10 +24,10 @@ from collections import OrderedDict, deque
 from math import ceil, pi
 import six
 
-import ipywidgets as widgets
-
 import math as mt
 import numpy as np
+
+from IPython.display import display
 
 from bokeh.layouts import row, column, layout, gridplot
 from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter, Label
@@ -1931,12 +1931,12 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
             except Exception as e:
                 self.error(e)
 
-
+                
 # ------------------------------------------------------------------------------
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     """a data stream manager embedded a bokeh server"""
 
-    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0.):
+    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0., output=None):
         # route output to current cell
         NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
         DataStreamEventHandler.__init__(self, name)
@@ -1953,7 +1953,8 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         # start delay
         self._start_delay = start_delay
         # open the session
-        self.open()
+        if auto_start:
+            self.open()
 
     @property
     def bokeh_session(self):
@@ -1998,7 +1999,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         self.pause()
         # the underlying actions will be performed under critical section
         self.safe_document_modifications(self.__close)
-
+        
     @tracer
     def __close(self):
         """close/cleanup everything"""
@@ -2016,7 +2017,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         except Exception as e:
             self.error(e)
             self.debug("DataStreamer: Bokeh session closed")
-
+        
     @tracer
     def start(self, delay=0.):
         """start periodic activity"""
