@@ -41,6 +41,14 @@ JupyterContext = enum('LAB', 'NOTEBOOK')
 
 
 # ------------------------------------------------------------------------------
+def get_ioloop():
+    import IPython, zmq
+    ipython = IPython.get_ipython()
+    if ipython and hasattr(ipython, 'kernel'):
+        return zmq.eventloop.ioloop.IOLoop.instance()
+   
+
+# ------------------------------------------------------------------------------
 def get_jupyter_context():
     try:
         jcv = os.environ['JUPYTER_CONTEXT']
@@ -136,9 +144,54 @@ def cell_context(context):
         sys.stderr.flush()
         kernel.set_parent(*save_context)
 
-
+  
 # ------------------------------------------------------------------------------
-class FakeOutput(object):
+class __SharedOutput__(object):
+    
+    def __init__(self, clear_allowed=False, close_allowed=False):
+        self._clear_allowed = clear_allowed
+        self._close_allowed = close_allowed
+        
+    @property
+    def clear_allowed(self):
+        return self._clear_allowed 
+
+    @property
+    def close_allowed(self):
+        return self._close_allowed
+    
+    
+# ------------------------------------------------------------------------------
+class SharedOutput(ipw.Output, __SharedOutput__):
+    
+    def __init__(self, clear_allowed=False, close_allowed=False):
+        ipw.Output.__init__(self)
+        __SharedOutput__.__init__(self, clear_allowed, close_allowed)
+        #self.layout.border = '1px solid grey'
+
+    @property
+    def clear_allowed(self):
+        return self._clear_allowed 
+
+    @property
+    def close_allowed(self):
+        return self._close_allowed
+
+    def clear_output(self):
+        if self._clear_allowed:
+            super(SharedOutput, self).clear_output()
+
+    def close(self):
+        if self._close_allowed:
+            super(SharedOutput, self).close()
+    
+    
+# ------------------------------------------------------------------------------
+class FakeOutput(__SharedOutput__):
+    
+    def __init__(self):
+        __SharedOutput__.__init__(self)
+        
     def clear_output(self):
         pass
 
@@ -156,16 +209,17 @@ class FakeOutput(object):
 class NotebookCellContent(object):
     default_logger = "fs.client.jupyter"
 
-    def __init__(self, name=None, logger=None):
+    def __init__(self, name=None, logger=None, output=None):
         uuid = uuid4().hex
         self._uid = uuid
         self._name = name if name is not None else str(uuid)
-        self._context = CellContext()
+        self._output = output
+        self._output = FakeOutput() if output is None else output
         self._logger = logger if logger is not None else logging.getLogger(NotebookCellContent.default_logger)
         try:
             h = self._logger.handlers[0]
         except IndexError:
-            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.DEBUG)
+            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
         except:
             pass
 
@@ -178,21 +232,23 @@ class NotebookCellContent(object):
         return self._uid
 
     @property
-    def context(self):
-        return self._context
+    def output(self):
+        return self._output
 
-    @context.setter
-    def context(self, new_context):
-        self._context = new_context
+    @output.setter
+    def output(self, output):
+        self._output = output
 
-    def display(self, widgets_layout):
-        with cell_context(self._context):
-            display(widgets_layout)
+    def display(self, widgets):
+        with self._output:
+            display(widgets)
 
     def clear_output(self):
-        with cell_context(self._context):
-            clear_output()
+        self._output.clear_output()
 
+    def close_output(self):
+        self._output.close()
+        
     @property
     def logger(self):
         return self._logger
@@ -207,33 +263,33 @@ class NotebookCellContent(object):
     def print_to_cell(self, *args):
         self.print(*args)
 
-    def print(self, *args):
-        with cell_context(self._context):
+    def print(self, *args, **kwargs):
+        with self._output:
             try:
-                self._logger.print(*args)
+                self._logger.print(*args, **kwargs)
             except:
-                print(*args)
+                print(*args, **kwargs)
 
     def debug(self, msg, *args, **kwargs):
-        with cell_context(self._context):
+        with self._output:
             self._logger.debug(msg, *args, **kwargs)
 
     def info(self, msg, *args, **kwargs):
-        with cell_context(self._context):
+        with self._output:
             self._logger.info(msg, *args, **kwargs)
 
     def warning(self, msg, *args, **kwargs):
-        with cell_context(self._context):
+        with self._output:
             self._logger.warning(msg, *args, **kwargs)
 
     def error(self, msg, *args, **kwargs):
-        with cell_context(self._context):
+        with self._output:
             self._logger.error(msg, *args, **kwargs)
 
     def critical(self, msg, *args, **kwargs):
-        with cell_context(self._context):
+        with self._output:
             self._logger.critical(msg, *args, **kwargs)
 
     def exception(self, msg, *args, **kwargs):
-        with cell_context(self._context):
+        with self._output:
             self._logger.exception(msg, *args, **kwargs)

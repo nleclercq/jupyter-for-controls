@@ -29,6 +29,8 @@ import numpy as np
 
 from IPython.display import display
 
+import ipywidgets as ipw
+
 from bokeh.layouts import row, column, layout, gridplot
 from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter, Label
 from bokeh.models import widgets as BokehWidgets
@@ -645,7 +647,7 @@ class InteractionsManager(object):
                 # we consequently have to call the owner's handler asynchrounously so that
                 # it will be able to update the plot
                 # -----------------------------------------------------------------------------
-                # nb: this a tmp impl - we are waiting for the bokeh events to improve a bit...
+                # nb: this a tmp impl - we are waiting for the bokeh events to improve it
                 # -----------------------------------------------------------------------------
                 self._session.timeout_callback(self._callback, 0.25)
             except Exception as e:
@@ -1649,7 +1651,7 @@ class GenericChannel(Channel):
                                               data_source=self.data_source,
                                               model_properties=self.model_properties)
             if self._delegate:
-                self._delegate.context = self.context
+                self._delegate.output = self.output
                 events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
                 self._delegate.register_event_handler(self, events)
                 self._delegate_model = self._delegate.setup_model()
@@ -1685,13 +1687,12 @@ class LayoutChannel(Channel):
         for channel in self._channels.values():
             channel.bokeh_session = bks
 
-    @NotebookCellContent.context.setter
-    def context(self, new_context):
-        """overwrites NotebookCellContent.context.setter"""
-        assert (isinstance(new_context, CellContext))
-        self._context = new_context
+    @NotebookCellContent.output.setter
+    def output(self, new_output):
+        """overwrites NotebookCellContent.output.setter"""
+        self._output = new_output
         for channel in self._channels.values():
-            channel.context = new_context
+            channel.output = new_output
 
     def add(self, channels):
         """add the specified (sub)channels"""
@@ -1700,7 +1701,7 @@ class LayoutChannel(Channel):
     def __on_add_channel(self, channel):
         """called when a sub-channel is added to this channel"""
         if channel is not self:
-            channel.context = self.context
+            channel.output = self.output
             events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
             channel.register_event_handler(self, events)
 
@@ -1805,8 +1806,8 @@ class LayoutChannel(Channel):
         """spread the children in tabs"""
         tl = list()
         for cn, ci in six.iteritems(children):
-            tl.append(BokehWidgets.Panel(child=ci, title=cn))
-        self._tabs_widget = BokehWidgets.Tabs(tabs=tl)
+            tl.append(Bokehipw.Panel(child=ci, title=cn))
+        self._tabs_widget = Bokehipw.Tabs(tabs=tl)
         self._tabs_widget.on_change("active", self.on_tabs_selection_change)
         return column(name=str(self.uid), children=[self._tabs_widget], responsive=True)
 
@@ -1875,13 +1876,12 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         for channel in self._channels.values():
             channel.bokeh_session = bks
 
-    @NotebookCellContent.context.setter
-    def context(self, new_context):
-        """overwrites NotebookCellContent.context.setter"""
-        assert (isinstance(new_context, CellContext))
-        self._context = new_context
+    @NotebookCellContent.output.setter
+    def output(self, new_output):
+        """overwrites NotebookCellContent.output.setter"""
+        self._output = new_output
         for channel in self._channels.values():
-            channel.context = new_context
+            channel.output = new_output
 
     def add(self, channels):
         """add the specified channels"""
@@ -1889,7 +1889,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
 
     def _on_add_channel(self, channel):
         """called when a new channel is added to the data stream"""
-        channel.context = self.context
+        channel.output = self.output
         events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
         channel.register_event_handler(self, events)
 
@@ -1936,7 +1936,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     """a data stream manager embedded a bokeh server"""
 
-    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0., output=None):
+    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0.):
         # route output to current cell
         NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
         DataStreamEventHandler.__init__(self, name)
@@ -1961,19 +1961,18 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         """return the associated bokeh session"""
         return self
 
-    @NotebookCellContent.context.setter
-    def context(self, new_context):
-        """overwrites NotebookCellContent.context.setter"""
-        assert (isinstance(new_context, CellContext))
-        self._context = new_context
+    @NotebookCellContent.output.setter
+    def output(self, new_output):
+        """overwrites NotebookCellContent.output.setter"""
+        self._output = new_output
         for ds in self._data_streams:
-            ds.context = new_context
-
+            ds.output = new_output
+    
     def add(self, ds):
         events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.MODEL_CHANGED]
         if isinstance(ds, DataStream):
             ds.bokeh_session = self
-            ds.context = self.context
+            ds.output = self.output
             ds.register_event_handler(self, events)
             self._data_streams.append(ds)
         elif isinstance(ds, (list, tuple)):
@@ -1981,7 +1980,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
                 if not isinstance(s, DataStream):
                     raise ValueError("invalid argument: expected a list, a tuple or a single instance of DataStream")
                 s.bokeh_session = self
-                s.context = self.context
+                s.output = self.output
                 s.register_event_handler(self, events)
                 self._data_streams.append(s)
         else:
@@ -2118,8 +2117,12 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # check input parameters
         assert (isinstance(data_streamer, DataStreamer))
         # route output to current cell
-        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
+        NotebookCellContent.__init__(self, 
+                                     name, 
+                                     output=kwargs.get('output', None), 
+                                     logger=logging.getLogger(module_logger_name))
         DataStreamEventHandler.__init__(self, name)
+        assert(self._output is not None)
         # data streamer
         self.data_streamer = data_streamer
         # start/stop/close button
@@ -2127,56 +2130,58 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # function called when the close button is clicked
         self._close_callbacks = list()
         # auto-start
-        self.__auto_start(kwargs.get('auto_start', True))
-
-    def __auto_start(self, auto_start):
         self._running = False
+        auto_start = kwargs.get('auto_start', True)
         if auto_start:
+            with self._ds_output:
+                self._data_streamer.open()
             self.__on_freeze_unfreeze_clicked()
-
+    
     @staticmethod
     def l01a(width='auto', *args, **kwargs):
-        return widgets.Layout(flex='0 1 auto', width=width, *args, **kwargs)
+        return ipw.Layout(flex='0 1 auto', width=width, *args, **kwargs)
 
     @staticmethod
     def l11a(width='auto', *args, **kwargs):
-        return widgets.Layout(flex='1 1 auto', width=width, *args, **kwargs)
+        return ipw.Layout(flex='1 1 auto', width=width, *args, **kwargs)
 
     def __setup_update_period_slider(self, **kwargs):
-        return widgets.FloatSlider(
+        return ipw.FloatSlider(
             value=self.data_streamer.update_period,
             min=kwargs.get('min_refresh_period', 0.25),
             max=kwargs.get('max_refresh_period', 5.0),
             step=kwargs.get('step_refresh_period', 0.25),
-            description='Refresh Period (s)',
+            description='{} update period (s)'.format(self.data_streamer.name),
             disabled=False,
             continuous_update=False,
             orientation='horizontal',
             readout=True,
             readout_format='.2f',
+            style={'description_width':'initial'}
         )
 
     def __setup_controls(self, **kwargs):
         self._error_area = None
-        self._error_layout = None
-        self._up_slider = None
         if kwargs.get('up_slider_enabled', True):
             self._up_slider = self.__setup_update_period_slider(**kwargs)
             self._up_slider.observe(self.__on_refresh_period_changed, names='value')
         else:
             self._up_slider = None
         bd = "Freeze" if kwargs.get('auto_start', True) else "Unfreeze"
-        self._freeze_unfreeze_button = widgets.Button(description=bd, layout=self.l01a(width="100px"))
+        self._freeze_unfreeze_button = ipw.Button(description=bd, layout=self.l01a(width="100px"))
         self._freeze_unfreeze_button.on_click(self.__on_freeze_unfreeze_clicked)
-        self._close_button = widgets.Button(description="Close", layout=self.l01a(width="100px"))
+        self._close_button = ipw.Button(description="Close", layout=self.l01a(width="100px"))
         self._close_button.on_click(self.__on_close_clicked)
         self._switch_buttons_to_valid_state()
-        wigets_list = list()
+        widgets_list = list()
         if self._up_slider:
-            wigets_list.append(self._up_slider)
-        wigets_list.extend([self._freeze_unfreeze_button, self._close_button])
-        self._controls = widgets.HBox(wigets_list, layout=self.l01a())
-        display(self._controls)
+            widgets_list.append(self._up_slider)
+        widgets_list.extend([self._freeze_unfreeze_button, self._close_button])
+        main_controls = ipw.HBox(widgets_list, layout=self.l01a())
+        self._ds_output = ipw.Output()
+        self._controls = ipw.VBox([main_controls, self._ds_output], layout=self.l01a())
+        with self._output:
+            display(self._controls)
 
     def __on_refresh_period_changed(self, event):
         try:
@@ -2215,18 +2220,18 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         if self._error_area:
             self._error_area.close()
         self.clear_output()
-        self.__call_close_callbacks()
+        self.close_output()
 
-    def register_close_callback(self, cb):
+    def register_close_callback(self, cb, kwargs=None):
         assert (hasattr(cb, '__call__'))
-        self._close_callbacks.append(cb)
+        self._close_callbacks.append({'func':cb, 'args':kwargs})
 
     def __call_close_callbacks(self):
         for cb in self._close_callbacks:
             try:
-                cb()
-            except:
-                pass
+                cb['func'](cb['args'])
+            except Exception as e:
+                print(e)
 
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
@@ -2257,28 +2262,21 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._freeze_unfreeze_button.style.button_color = '#FF0000'
 
     def _show_error(self, err_desc):
-        try:
-            with cell_context(self.context):
-                err = "Oops, the following error occurred:\n"
-                err += err_desc
-                if not self._error_area:
-                    self._error_area = widgets.Textarea(value=err, layout=self.l11a())
-                    self._error_area.rows = 3
-                    self.display(self._error_area)
-                else:
-                    self._error_area.value = err
-        except Exception as e:
-            self.error(e)
-            raise
+        err = "Oops, the following error occurred:\n"
+        err += err_desc
+        if self._error_area is None:
+            self._error_area = ipw.Textarea(value=err, rows=3, layout=self.l11a()) 
+            with self._ds_output:
+                display(self._error_area)
+        else:
+            self._error_area.value = nerr
+            self._error_area.rows = 3
+            self._error_area.disabled = False
 
-    def _hide_error(self):
-        try:
-            self._error_area.close()
-        except:
-            pass
-        finally:
-            self._error_area = None
-
+    def _hide_error(self): 
+        self._error_area.close()
+        self._error_area = None
+        
     @property
     def data_streamer(self):
         return self._data_streamer
@@ -2290,7 +2288,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # data streamer
         self._data_streamer = ds
         # route data streamer output to current cell
-        self._data_streamer.context = self.context
+        self._data_streamer.output = self.output
         # register event handler
         events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
         self._data_streamer.register_event_handler(self, events)

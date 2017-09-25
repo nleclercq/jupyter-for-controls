@@ -22,4 +22,3 @@
 from jupytango.jupyter.tools import *
 from jupytango.jupyter.plots import *
 from jupytango.jupyter.notebook import *
-
