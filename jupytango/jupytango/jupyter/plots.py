@@ -2269,7 +2269,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             with self._ds_output:
                 display(self._error_area)
         else:
-            self._error_area.value = nerr
+            self._error_area.value = err
             self._error_area.rows = 3
             self._error_area.disabled = False
 
