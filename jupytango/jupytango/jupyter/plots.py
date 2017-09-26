@@ -46,8 +46,8 @@ from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
 import bokeh.events
 
-from tools import *
-from session import BokehSession
+from fs.client.jupyter.tools import *
+from fs.client.jupyter.session import BokehSession
 
 from skimage.transform import rescale
 
@@ -1301,7 +1301,7 @@ class ImageChannel(Channel):
             cds.change.emit()
         """)
 
-    def __setup_toolbar(self, figure):
+    def __setup_toolbar(self, figure, w=0, h=0):
         hrd = [self._rrd]
         hcb = self.__hover_callback()
         htt = [('x,y,z:', '@x_hover{0.00},@y_hover{0.00},@z_hover{0.00}')]
@@ -1318,6 +1318,7 @@ class ImageChannel(Channel):
         figure.toolbar.active_drag = None
         figure.toolbar.active_scroll = None
         figure.toolbar.active_tap = None
+        figure.toolbar_location = 'right' if w >= h else 'above'
 
     def get_model(self):
         """returns the Bokeh model (figure, layout, ...) associated with the Channel or None if no model"""
@@ -1350,7 +1351,6 @@ class ImageChannel(Channel):
             fkwargs['y_range'] = yrg
             fkwargs['width'] = props.get('width', 320)
             fkwargs['height'] = props.get('height', 320)
-            fkwargs['toolbar_location'] = 'right'  # if fkwargs['height'] >= fkwargs['width'] else 'above'
             fkwargs['tools'] = ""
             f = figure(**fkwargs)
             self._cds.tags = [f.ref['id']]
@@ -1380,7 +1380,7 @@ class ImageChannel(Channel):
             f.xgrid.grid_line_color = None
             f.ygrid.grid_line_color = None
             self._show_msg_label(f)
-            self.__setup_toolbar(f)
+            self.__setup_toolbar(f, fkwargs['width'], fkwargs['height'])
             self._mdl = f
             bsm = props.get('selection_manager', None)
             if bsm:
@@ -1636,17 +1636,17 @@ class GenericChannel(Channel):
                 self.emit_recover()
             self.model_properties['uid'] = self.uid
             if sd.format == ChannelData.Format.SCALAR:
-                # print("GenericChannel.update.instanciating SCALAR channel")
+                #self.info("GenericChannel.update.instanciating SCALAR channel")
                 self._delegate = ScalarChannel(name=self.name,
                                                data_sources=[self.data_source],
                                                model_properties=self.model_properties)
             elif sd.format == ChannelData.Format.SPECTRUM:
-                # print("GenericChannel.update.instanciating SPECTRUM channel")
+                #self.info("GenericChannel.update.instanciating SPECTRUM channel")
                 self._delegate = SpectrumChannel(name=self.name,
                                                  data_sources=[self.data_source],
                                                  model_properties=self.model_properties)
             elif sd.format == ChannelData.Format.IMAGE:
-                # print("GenericChannel.update.instanciating IMAGE channel")
+                #self.info("GenericChannel.update.instanciating IMAGE channel")
                 self._delegate = ImageChannel(name=self.name,
                                               data_source=self.data_source,
                                               model_properties=self.model_properties)
@@ -1654,6 +1654,7 @@ class GenericChannel(Channel):
                 self._delegate.output = self.output
                 events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
                 self._delegate.register_event_handler(self, events)
+                self._delegate.bokeh_session = self.bokeh_session
                 self._delegate_model = self._delegate.setup_model()
                 self.emit_model_changed(self._delegate_model)
         except Exception as e:
@@ -1765,33 +1766,35 @@ class LayoutChannel(Channel):
     def __setup_grid_layout(self, children, **kwargs):
         """spread the children in rows"""
         try:
-            num_columns, width_sum = 1, 0
-            # print("setup_grid_layout: images layout contains {} children".format(len(children)))
-            for c in children.values():
-                width_sum += self.__model_width(c)
-                if width_sum <= 600:
-                    num_columns += 1
-                else:
-                    break
-            num_rows = int(ceil(float(len(children)) / float(num_columns)))
-            # print("num_columns={} - num_rows={}".format(num_columns, num_rows))
-            rl = list()
-            for i in range(num_rows):
-                rl.append([None for i in range(num_columns)])
-            ri, fi = 0, 0
-            for c in children.values():
-                rl[ri][fi] = c
-                fi = (fi + 1) % num_columns
-                if not fi:
-                    ri += 1
-            merge_tools = kwargs.get('merge_tools', True)
-            if merge_tools:
-                tbo = dict()
-                tbo['merge_tools'] = True
-                tbo['logo'] = None
-                return gridplot(children=rl, toolbar_options=tbo)
+            if len(children) > 1:
+                num_columns, width_sum = 1, 0
+                # print("setup_grid_layout: images layout contains {} children".format(len(children)))
+                for c in children.values():
+                    width_sum += self.__model_width(c)
+                    if width_sum <= 600:
+                        num_columns += 1
+                    else:
+                        break
+                num_rows = int(ceil(float(len(children)) / float(num_columns)))
+                # print("num_columns={} - num_rows={}".format(num_columns, num_rows))
+                rl = list()
+                for i in range(num_rows):
+                    rl.append([None for i in range(num_columns)])
+                ri, fi = 0, 0
+                for c in children.values():
+                    rl[ri][fi] = c
+                    fi = (fi + 1) % num_columns
+                    if not fi:
+                        ri += 1
+                merge_tools = kwargs.get('merge_tools', True)
+                if merge_tools:
+                    tbo = dict()
+                    tbo['merge_tools'] = True
+                    tbo['logo'] = None
+                    tbo['toolbar_location'] = 'above'
+                    return gridplot(children=rl, toolbar_options=tbo)
             else:
-                return layout(name=str(self.uid), children=rl)
+                return layout(children=children.values())
         except Exception as e:
             raise
 
@@ -1806,8 +1809,8 @@ class LayoutChannel(Channel):
         """spread the children in tabs"""
         tl = list()
         for cn, ci in six.iteritems(children):
-            tl.append(Bokehipw.Panel(child=ci, title=cn))
-        self._tabs_widget = Bokehipw.Tabs(tabs=tl)
+            tl.append(BokehWidgets.Panel(child=ci, title=cn))
+        self._tabs_widget = BokehWidgets.Tabs(tabs=tl)
         self._tabs_widget.on_change("active", self.on_tabs_selection_change)
         return column(name=str(self.uid), children=[self._tabs_widget], responsive=True)
 
@@ -1936,9 +1939,13 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
 class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     """a data stream manager embedded a bokeh server"""
 
-    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0.):
+    def __init__(self, name, data_streams, update_period=None, auto_start=False, start_delay=0., output=None):
         # route output to current cell
-        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
+        NotebookCellContent.__init__(self,
+                                     name,
+                                     output=output,
+                                     logger=logging.getLogger(module_logger_name),
+                                     )
         DataStreamEventHandler.__init__(self, name)
         BokehSession.__init__(self)
         # a FIFO to store incoming DataStreamEvent
@@ -1989,7 +1996,8 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     @tracer
     def open(self):
         """open the session and optionally start it """
-        super(DataStreamer, self).open()
+        with self.output:
+            super(DataStreamer, self).open()
 
     @tracer
     def close(self):
@@ -2114,29 +2122,30 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
     """a DataStreamer controller"""
 
     def __init__(self, name, data_streamer=None, **kwargs):
-        # check input parameters
-        assert (isinstance(data_streamer, DataStreamer))
-        # route output to current cell
-        NotebookCellContent.__init__(self, 
-                                     name, 
-                                     output=kwargs.get('output', None), 
-                                     logger=logging.getLogger(module_logger_name))
-        DataStreamEventHandler.__init__(self, name)
-        assert(self._output is not None)
-        # data streamer
-        self.data_streamer = data_streamer
-        # start/stop/close button
-        self.__setup_controls(**kwargs)
-        # function called when the close button is clicked
-        self._close_callbacks = list()
-        # auto-start
-        self._running = False
-        auto_start = kwargs.get('auto_start', True)
-        if auto_start:
-            with self._ds_output:
+        try:
+            # check input parameters
+            assert(isinstance(data_streamer, DataStreamer))
+            # route output to current cell
+            NotebookCellContent.__init__(self,
+                                         name,
+                                         output=kwargs.get('output', None),
+                                         logger=logging.getLogger(module_logger_name))
+            DataStreamEventHandler.__init__(self, name)
+            # start/stop/close button
+            self.__setup_controls(data_streamer, **kwargs)
+            # data streamer
+            self.data_streamer = data_streamer
+            # function called when the close button is clicked
+            self._close_callbacks = list()
+            # auto-start
+            self._running = False
+            auto_start = kwargs.get('auto_start', True)
+            if auto_start:
                 self._data_streamer.open()
-            self.__on_freeze_unfreeze_clicked()
-    
+                self.__on_freeze_unfreeze_clicked()
+        except Exception as e:
+            print(e)
+
     @staticmethod
     def l01a(width='auto', *args, **kwargs):
         return ipw.Layout(flex='0 1 auto', width=width, *args, **kwargs)
@@ -2145,13 +2154,13 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
     def l11a(width='auto', *args, **kwargs):
         return ipw.Layout(flex='1 1 auto', width=width, *args, **kwargs)
 
-    def __setup_update_period_slider(self, **kwargs):
+    def __setup_update_period_slider(self, data_streamer, **kwargs):
         return ipw.FloatSlider(
-            value=self.data_streamer.update_period,
+            value=data_streamer.update_period,
             min=kwargs.get('min_refresh_period', 0.25),
             max=kwargs.get('max_refresh_period', 5.0),
             step=kwargs.get('step_refresh_period', 0.25),
-            description='{} update period (s)'.format(self.data_streamer.name),
+            description='Update period (s)',
             disabled=False,
             continuous_update=False,
             orientation='horizontal',
@@ -2160,10 +2169,11 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             style={'description_width':'initial'}
         )
 
-    def __setup_controls(self, **kwargs):
+    def __setup_controls(self, data_streamer, **kwargs):
         self._error_area = None
+        self._error_area_enabled = kwargs.get('error_area_enabled', True)
         if kwargs.get('up_slider_enabled', True):
-            self._up_slider = self.__setup_update_period_slider(**kwargs)
+            self._up_slider = self.__setup_update_period_slider(data_streamer, **kwargs)
             self._up_slider.observe(self.__on_refresh_period_changed, names='value')
         else:
             self._up_slider = None
@@ -2179,9 +2189,9 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         widgets_list.extend([self._freeze_unfreeze_button, self._close_button])
         main_controls = ipw.HBox(widgets_list, layout=self.l01a())
         self._ds_output = ipw.Output()
+        self._ds_output.layout.border = "1px solid grey"
         self._controls = ipw.VBox([main_controls, self._ds_output], layout=self.l01a())
-        with self._output:
-            display(self._controls)
+        self.display(self._controls)
 
     def __on_refresh_period_changed(self, event):
         try:
@@ -2216,11 +2226,9 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             self._data_streamer.close()
         except Exception as e:
             self.error(e)
+        self._ds_output.clear_output()
         self._controls.close()
-        if self._error_area:
-            self._error_area.close()
-        self.clear_output()
-        self.close_output()
+        self._hide_error()
 
     def register_close_callback(self, cb, kwargs=None):
         assert (hasattr(cb, '__call__'))
@@ -2262,6 +2270,8 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._freeze_unfreeze_button.style.button_color = '#FF0000'
 
     def _show_error(self, err_desc):
+        if not self._error_area_enabled:
+            return
         err = "Oops, the following error occurred:\n"
         err += err_desc
         if self._error_area is None:
@@ -2273,8 +2283,9 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             self._error_area.rows = 3
             self._error_area.disabled = False
 
-    def _hide_error(self): 
-        self._error_area.close()
+    def _hide_error(self):
+        if self._error_area:
+            self._error_area.close()
         self._error_area = None
         
     @property
@@ -2288,7 +2299,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # data streamer
         self._data_streamer = ds
         # route data streamer output to current cell
-        self._data_streamer.output = self.output
+        self._data_streamer.output = self._ds_output
         # register event handler
         events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
         self._data_streamer.register_event_handler(self, events)

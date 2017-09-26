@@ -112,97 +112,32 @@ def tracer(fn):
 
 
 # ------------------------------------------------------------------------------
-class CellContext(object):
+class CellOutput(object):
     def __init__(self):
         k = get_ipython().kernel
         self._ident = k._parent_ident
         self._header = k._parent_header
-
-    def __call__(self):
-        return (self._ident, self._header)
-
-
-# ------------------------------------------------------------------------------
-@contextmanager
-def cell_context(context):
-    try:
-        assert (isinstance(context, CellContext))
-        kernel = get_ipython().kernel
-        save_context = (kernel._parent_ident, kernel._parent_header)
-        sys.stdout.flush()
-        sys.stderr.flush()
-        kernel.set_parent(*context())
-    except Exception as e:
-        print(e)
-        return
-    try:
-        yield
-    except:
-        raise
-    finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-        kernel.set_parent(*save_context)
-
-  
-# ------------------------------------------------------------------------------
-class __SharedOutput__(object):
-    
-    def __init__(self, clear_allowed=False, close_allowed=False):
-        self._clear_allowed = clear_allowed
-        self._close_allowed = close_allowed
-        
-    @property
-    def clear_allowed(self):
-        return self._clear_allowed 
-
-    @property
-    def close_allowed(self):
-        return self._close_allowed
-    
-    
-# ------------------------------------------------------------------------------
-class SharedOutput(ipw.Output, __SharedOutput__):
-    
-    def __init__(self, clear_allowed=False, close_allowed=False):
-        ipw.Output.__init__(self)
-        __SharedOutput__.__init__(self, clear_allowed, close_allowed)
-        #self.layout.border = '1px solid grey'
-
-    @property
-    def clear_allowed(self):
-        return self._clear_allowed 
-
-    @property
-    def close_allowed(self):
-        return self._close_allowed
-
-    def clear_output(self):
-        if self._clear_allowed:
-            super(SharedOutput, self).clear_output()
-
-    def close(self):
-        if self._close_allowed:
-            super(SharedOutput, self).close()
-    
-    
-# ------------------------------------------------------------------------------
-class FakeOutput(__SharedOutput__):
-    
-    def __init__(self):
-        __SharedOutput__.__init__(self)
-        
-    def clear_output(self):
-        pass
-
-    def close(self):
-        pass
+        self._save_context = None
 
     def __enter__(self):
-        pass
+        kernel = get_ipython().kernel
+        self._save_context = (kernel._parent_ident, kernel._parent_header)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        kernel.set_parent(self._ident, self._header)
 
     def __exit__(self, etype, evalue, tb):
+        sys.stdout.flush()
+        sys.stderr.flush()
+        kernel = get_ipython().kernel
+        kernel.set_parent(*self._save_context)
         return False
+
+    def clear_output(self):
+        clear_output()
+
+    def close(self):
+        pass
 
 
 # ------------------------------------------------------------------------------
@@ -213,8 +148,7 @@ class NotebookCellContent(object):
         uuid = uuid4().hex
         self._uid = uuid
         self._name = name if name is not None else str(uuid)
-        self._output = output
-        self._output = FakeOutput() if output is None else output
+        self._output = CellOutput() if output is None else output
         self._logger = logger if logger is not None else logging.getLogger(NotebookCellContent.default_logger)
         try:
             h = self._logger.handlers[0]

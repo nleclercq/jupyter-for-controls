@@ -33,7 +33,7 @@ from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import server_document
 from bokeh.util.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
 
-from tools import JupyterContext, get_jupyter_context
+from fs.client.jupyter.tools import JupyterContext, get_jupyter_context
 
 module_logger_name = "jupytango.jupyter.session"
 
@@ -135,6 +135,14 @@ class BokehSession(object):
     @property
     def suspended(self):
         return self._suspended
+
+    @property
+    def opened(self):
+        return not self._closed
+
+    @property
+    def closed(self):
+        return self._closed
 
     @property
     def callback_period(self):
