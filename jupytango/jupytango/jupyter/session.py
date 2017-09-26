@@ -33,8 +33,11 @@ from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import server_document
 from bokeh.util.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
 
-from fs.client.jupyter.tools import JupyterContext, get_jupyter_context
-
+try:
+    from fs.client.jupyter.tools import JupyterContext, get_jupyter_context
+except:
+    from tools import JupyterContext, get_jupyter_context
+    
 module_logger_name = "jupytango.jupyter.session"
 
 # ------------------------------------------------------------------------------

@@ -164,6 +164,14 @@ class NotebookCellContent(object):
     @property
     def uid(self):
         return self._uid
+        
+    @property
+    def logger(self):
+        return self._logger
+
+    @logger.setter
+    def logger(self, l):
+        self._logger = l
 
     @property
     def output(self):
@@ -172,7 +180,7 @@ class NotebookCellContent(object):
     @output.setter
     def output(self, output):
         self._output = output
-
+        
     def display(self, widgets):
         with self._output:
             display(widgets)
@@ -183,14 +191,6 @@ class NotebookCellContent(object):
     def close_output(self):
         self._output.close()
         
-    @property
-    def logger(self):
-        return self._logger
-
-    @logger.setter
-    def logger(self, l):
-        self._logger = l
-
     def set_logging_level(self, level):
         self._logger.setLevel(level)
 

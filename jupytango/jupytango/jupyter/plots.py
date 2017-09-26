@@ -46,8 +46,15 @@ from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
 import bokeh.events
 
-from fs.client.jupyter.tools import *
-from fs.client.jupyter.session import BokehSession
+try:
+    from fs.client.jupyter.tools import *
+except:
+    from tools import *
+    
+try:
+    from fs.client.jupyter.session import BokehSession
+except:
+    from session import BokehSession
 
 from skimage.transform import rescale
 
@@ -2021,9 +2028,9 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         # delegate the remaining actions to our super class (this is mandatory)
         try:
             super(DataStreamer, self).cleanup(async=False)
+            self.debug("DataStreamer: Bokeh session closed")
         except Exception as e:
             self.error(e)
-            self.debug("DataStreamer: Bokeh session closed")
         
     @tracer
     def start(self, delay=0.):
@@ -2184,6 +2191,12 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._close_button.on_click(self.__on_close_clicked)
         self._switch_buttons_to_valid_state()
         widgets_list = list()
+        title = kwargs.get('title', None)
+        if title:
+            div = ipw.HTML(value="<b>{}</b>:".format(title))
+            widgets_list.append(div)
+            lbl = ipw.HTML(value="", layout=self.l01a(width="40px"))
+            widgets_list.append(lbl)
         if self._up_slider:
             widgets_list.append(self._up_slider)
         widgets_list.extend([self._freeze_unfreeze_button, self._close_button])
