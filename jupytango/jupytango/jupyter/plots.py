@@ -2201,9 +2201,10 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             widgets_list.append(self._up_slider)
         widgets_list.extend([self._freeze_unfreeze_button, self._close_button])
         main_controls = ipw.HBox(widgets_list, layout=self.l01a())
-        self._ds_output = ipw.Output()
-        self._ds_output.layout.border = "1px solid grey"
-        self._controls = ipw.VBox([main_controls, self._ds_output], layout=self.l01a())
+        self._ea_output = ipw.Output(layout=self.l11a())
+        self._ea_output.layout.border = "1px solid grey"
+        self._ds_output = ipw.Output(layout=self.l11a())
+        self._controls = ipw.VBox([main_controls, self._ea_output, self._ds_output], layout=self.l01a())
         self.display(self._controls)
 
     def __on_refresh_period_changed(self, event):
@@ -2239,9 +2240,11 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             self._data_streamer.close()
         except Exception as e:
             self.error(e)
+        self._ea_output.clear_output()
+        self._ea_output.close()
         self._ds_output.clear_output()
+        self._ds_output.close()
         self._controls.close()
-        self._hide_error()
 
     def register_close_callback(self, cb, kwargs=None):
         assert (hasattr(cb, '__call__'))
@@ -2289,18 +2292,21 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         err += err_desc
         if self._error_area is None:
             self._error_area = ipw.Textarea(value=err, rows=3, layout=self.l11a()) 
-            with self._ds_output:
+            with self._ea_output:
                 display(self._error_area)
         else:
             self._error_area.value = err
             self._error_area.rows = 3
             self._error_area.disabled = False
+        self._ea_output.layout.border = ""
 
     def _hide_error(self):
         if self._error_area:
             self._error_area.close()
-        self._error_area = None
-        
+            self._error_area = None
+        self._ea_output.clear_output()
+        self._ea_output.layout.border = "1px solid grey"
+
     @property
     def data_streamer(self):
         return self._data_streamer
