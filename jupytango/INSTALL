@@ -111,6 +111,7 @@ INSTALLING A STANDALONE 'JUPYTANGO' DISTRIBUTION FOR PYTHON 2.7 USING MINICONDA2
 ===================================================
 10. INSTALL THE REQUIRED JUPYTERLAB EXTENSIONS
 ===================================================
+- in case you plan to work with the classic notebook (i.e. not jupyterlab), you can skip this step
 - execute: conda install nodejs
 - execute: jupyter labextension install @jupyter-widgets/jupyterlab-manager    
     - NB: you can safely ignore any error related to 'gyp'

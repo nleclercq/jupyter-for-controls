@@ -1916,9 +1916,9 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
         models = list()
         for channel in self._channels.values():
             model = channel.setup_model()
-            if channel.show_title and channel.title is not None:
-                div_txt = "<b>{}</b>".format(channel.title)
-                models.append(Div(text=div_txt))
+            #if channel.show_title and channel.title is not None:
+            #    div_txt = "<b>{}</b>".format(channel.title)
+            #    models.append(Div(text=div_txt))
             if model:
                 models.append(model)
         return models
