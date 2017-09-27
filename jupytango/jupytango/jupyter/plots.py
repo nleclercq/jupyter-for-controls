@@ -46,16 +46,24 @@ from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
 import bokeh.events
 
+#TODO: this try import from several places is ugly!
 try:
     from fs.client.jupyter.tools import *
 except:
-    from tools import *
-    
+    try: 
+        from jupytango.jupyter.tools import *  
+    except:
+        from common.tools import *
+   
+#TODO: this try import from several places is ugly!
 try:
     from fs.client.jupyter.session import BokehSession
 except:
-    from session import BokehSession
-
+    try: 
+        from jupytango.jupyter.session import BokehSession
+    except:
+        from common.session import BokehSession
+        
 from skimage.transform import rescale
 
 module_logger_name = "fs.client.jupyter.plots"

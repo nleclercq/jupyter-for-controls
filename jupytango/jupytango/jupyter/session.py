@@ -19,6 +19,7 @@
 
 from __future__ import print_function
 
+import imp
 import logging
 from threading import Lock
 from collections import deque
@@ -36,9 +37,12 @@ from bokeh.util.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
 try:
     from fs.client.jupyter.tools import JupyterContext, get_jupyter_context
 except:
-    from tools import JupyterContext, get_jupyter_context
-    
-module_logger_name = "jupytango.jupyter.session"
+    try: 
+        from jupytango.jupyter.tools import JupyterContext, get_jupyter_context
+    except:
+        from common.tools import JupyterContext, get_jupyter_context
+        
+module_logger_name = "fs.client.jupyter.session"
 
 # ------------------------------------------------------------------------------
 class BokehSessionHandler(Handler):
@@ -305,9 +309,9 @@ class BokehSessionManager(object):
         import socket
         from tornado.ioloop import IOLoop
         from bokeh.server.server import Server
-        logging.getLogger('tornado').setLevel(logging.ERROR)  # TODO: tmp stuff
-        logging.getLogger('bokeh.server.tornado').setLevel(logging.ERROR)  # TODO: tmp stuff
-        logging.getLogger('bokeh.server.util').setLevel(logging.ERROR)  # TODO: tmp stuff
+        bslg = logging.getLogger('bokeh.server.util')
+        bsll = bslg.getEffectiveLevel()
+        bslg.setLevel(logging.ERROR) 
         output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
         app = Application(FunctionHandler(BokehSessionManager.__session_entry_point))
         app.add(BokehSessionHandler())
@@ -317,6 +321,7 @@ class BokehSessionManager(object):
         srv_addr = srv.address if srv.address else socket.gethostbyname(socket.gethostname())
         srv_url = 'http://{}:{}/'.format(srv_addr, srv.port)
         srv.start()
+        bslg.setLevel(bsll) 
         return {'server': srv, 'server_id': srv_id, 'server_url': srv_url, 'application': app}
     
     @staticmethod
@@ -339,5 +344,8 @@ class BokehSessionManager(object):
         BokehSessionManager.__logger__.debug("BokehSessionManager.close_session <<")
         assert (isinstance(session, BokehSession))
         if session.server:
-            session.server.stop()
+            try:
+                session.server.stop()
+            except AssertionError as e:
+                pass #TODO: ignore bokeh 0.12.7 "already stopped" error
         BokehSessionManager.__logger__.debug("BokehSessionManager.close_session >>")

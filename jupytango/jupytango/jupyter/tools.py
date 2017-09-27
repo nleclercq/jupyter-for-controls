@@ -28,6 +28,12 @@ from IPython import get_ipython
 from IPython.display import display, clear_output
 import ipywidgets as ipw
 
+try:
+    logging.getLogger().handlers[0]
+except IndexError:
+    logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
+except:
+    pass
 
 # ------------------------------------------------------------------------------
 def enum(*sequential):
@@ -150,12 +156,6 @@ class NotebookCellContent(object):
         self._name = name if name is not None else str(uuid)
         self._output = CellOutput() if output is None else output
         self._logger = logger if logger is not None else logging.getLogger(NotebookCellContent.default_logger)
-        try:
-            h = self._logger.handlers[0]
-        except IndexError:
-            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
-        except:
-            pass
 
     @property
     def name(self):

@@ -22,7 +22,6 @@
 import itango
 from jupytango import magics as jptm
 
-
 def load_ipython_extension(app):
     try:
         itango.load_ipython_extension(app)
