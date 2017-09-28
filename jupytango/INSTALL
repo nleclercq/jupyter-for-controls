@@ -139,7 +139,7 @@ config = get_config()
 
 # jupytango
 config.InteractiveShellApp.extensions = [
-    'jupytango'
+    'jupytango’, ‘tango’
 ]
 
 8. create directory for the jupytango kernelspec: mkdir ~/.local/share/jupyter/kernels/jupytango
