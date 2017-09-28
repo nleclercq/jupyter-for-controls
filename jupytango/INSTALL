@@ -16,7 +16,7 @@ INSTALLING A STANDALONE 'JUPYTANGO' DISTRIBUTION FOR PYTHON 2.7 USING MINICONDA2
 ===================================================
 1. MINICONDA INSTALL
 ===================================================
-- download miniconda2 from: https://conda.io/miniconda.html
+- download miniconda2 from: https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh
 - change mode of the downloaded package: chmod 777 ./Miniconda2-latest-Linux-x86_64.sh
 - execute the install script: ./Miniconda2-latest-Linux-x86_64.sh
 - script will ask you to specify the destination directory - be aware, the installation is NOT movable (miniconda uses harcoded paths)
@@ -51,8 +51,7 @@ INSTALLING A STANDALONE 'JUPYTANGO' DISTRIBUTION FOR PYTHON 2.7 USING MINICONDA2
 - download: https://sourceforge.net/projects/omniorb/files/omniORB/omniORB-4.2.2/omniORB-4.2.2.tar.bz2/download
 - execute: bunzip2 omniORB-4.2.2.tar.bz2
 - execute: tar -xf omniORB-4.2.2.tar
-- execute: export PATH=$CONDA_ROOT/bin:$PATH (so that we are going to use the miniconda2 python version)
-- execute: omniORB-4.2.2
+- execute: cd omniORB-4.2.2
 - execute: mkdir build; cd build
 - execute: ../configure --prefix=$CONDA_ROOT --disable-static
 - execute: make
@@ -131,7 +130,7 @@ INSTALLING A STANDALONE 'JUPYTANGO' DISTRIBUTION FOR PYTHON 2.7 USING MINICONDA2
 ===================================================
 1. clone the following git directory: git clone git@github.com:nleclercq/jupyter-for-controls.git
 3. execute: cd jupytango 
-4. execute: python setup install --prefix=$CONDA_ROOT
+4. execute: python ./setup.py install --prefix=$CONDA_ROOT
 5. create a ipython profile: cp -Rf ~/.ipython/profile_default/ ~/.ipython/profile_jupytango
 6. configure the new profile by editing: ~/.ipython/profile_jupytango/ipython_config.py 
 7. copy/paste the following content:
@@ -145,13 +144,13 @@ config.InteractiveShellApp.extensions = [
 
 8. create directory for the jupytango kernelspec: mkdir ~/.local/share/jupyter/kernels/jupytango
 
-9. in this directory, create a file named: 'kernel.json' 
+9. in this directory, create a file named: 'kernel.json’: nano ~/.local/share/jupyter/kernels/jupytango/kernel.json
 
 10. edit the 'kernel.json' file and copy/paste the following content:
 
 {
  "argv": [
-  "$CONDA_ROOT/bin/python",    
+  « <CONDA_ROOT>/bin/python",    
   "-m",
   "ipykernel",
   "-f",
@@ -160,10 +159,10 @@ config.InteractiveShellApp.extensions = [
   "jupytango"
  ],
  "language": "python",
- "display_name": "jTango"
+ "display_name": "JupyTango"
 }
 
-11: replace '$CONDA_ROOT' with the fully specified path to your miniconda install directory
+11: replace '<CONDA_ROOT>' with the fully specified path to your miniconda install directory
 
 
 ===================================================
@@ -171,8 +170,8 @@ config.InteractiveShellApp.extensions = [
 ===================================================
 1. launch jupyterlab. in a console type: jupyter-lab 
 2. if you didn't change anything in the config file located in $HOME/.jupyter, then jupyter should open a browser to http://localhost:8888
-3. in the 'launcher' tab of Jupyterlab, click on 'jTango' to open a new notebook and load a kernel with preloaded JupyTango packages
-4. try the '%tango_monitor' magic typing: 'tm' + <tab> to select a device + <tab> to slect an attribute
-5. try the '%plot_tango_attribute' magic typing: 'pta' + <tab> to select a device + <tab> to slect an attribute 
+3. in the 'launcher' tab of Jupyterlab, click on ‘JupyTango' to open a new notebook and load a kernel with preloaded JupyTango packages
+4. try the '%tango_monitor' magic typing: 'tm' + <tab> to select a device + <tab> to select an attribute
+5. try the '%plot_tango_attribute' magic typing: 'pta' + <tab> to select a device + <tab> to select an attribute 
 6. enjoy
 
