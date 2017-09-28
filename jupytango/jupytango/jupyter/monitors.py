@@ -62,7 +62,11 @@ class RingBuffer(np.ndarray):
 # ------------------------------------------------------------------------------
 class MonitoredAttribute(TangoEventsConsumer):
     """ manages a monitored Tango attribute """
-
+    
+    # THIS IMPL COMES FROM THE SOLEIL SCANNING PLATFORM AND HAS BEEN BEEN 
+    # OPTIMIZED FOR THIS PURPOSE - IT SHOULD BE REWRITTEN USING A GENERIC
+    # EVENT APPROACH - INSTEAD OF RELYING ON 'DATA READY' OR POLLING
+    
     def __init__(self, fqan, bfdp=0):
         try:
             TangoEventsConsumer.__init__(self)
