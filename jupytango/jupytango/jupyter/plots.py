@@ -2212,6 +2212,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._ea_output = ipw.Output(layout=self.l11a())
         self._ea_output.layout.border = "1px solid grey"
         self._ds_output = ipw.Output(layout=self.l11a())
+        self._ds_output.layout.border = "1px solid red"
         self._controls = ipw.VBox([main_controls, self._ea_output, self._ds_output], layout=self.l01a())
         self.display(self._controls)
 
