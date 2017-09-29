@@ -72,9 +72,6 @@ class BokehSession(object):
     
     __repo__ = dict()
     __repo_lock__ = Lock()
-
-    __sessions__ = deque()
-    __sessions_lock__ = Lock()
     
     def __init__(self, uuid=None):
         # session identifier
@@ -129,7 +126,7 @@ class BokehSession(object):
 
     @property
     def server(self):
-        return self._info['server']
+        return self._server_info['server']
 
     @property
     def document(self):
@@ -137,7 +134,7 @@ class BokehSession(object):
 
     @property
     def bokeh_session(self):
-        return self._info['server'].get_sessions('/')[0]
+        return self._server_info['server'].get_sessions('/')[0]
 
     @property
     def bokeh_session_id(self):
@@ -254,37 +251,27 @@ class BokehSession(object):
 
     def __repr__(self):
         return "BokehSession:{}:{}".format(self._uuid, ('closed' if self._closed else 'opened'))
-
-    @staticmethod
-    def close_all():
-        with BokehSession.__repo_lock__:
-            for s in BokehSession.__repo__.values():
-                try:
-                    s.close()
-                except Exception as e:
-                   self._logger.error('failed to close BokehSession:{}'.format(s.uuid))
     
     def __open(self):
-        with BokehSession.__sessions_lock__:
-            self._logger.debug("BokehSessionManager.open_session.spawning server for session {}".format(self.uuid))
-            self.__spawn_server()
-            script = server_document(url=self._server_info['server_url'])
-            if get_jupyter_context() == JupyterContext.LAB:
-                self._logger.info("BokehSessionManager.open_session:running in JupyterContext.LAB")
-                data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
-                metadata = {EXEC_MIME_TYPE: {"server_id": self._server_info['server_id']}}
-                publish_display_data(data, metadata=metadata)
-            else:
-                self._logger.info("BokehSessionManager.open_session:running in JupyterContext.NOTEBOOK")
-                display(HTML(script))
-            self._logger.debug("BokehSessionManager.open_session.server spawn for session {}".format(self.uuid))
+        self._logger.debug("BokehSession.open_session.spawning server for session {}".format(self.uuid))
+        self.__spawn_server()
+        script = server_document(url=self._server_info['server_url'])
+        if get_jupyter_context() == JupyterContext.LAB:
+            self._logger.info("BokehSession.open_session:running in JupyterContext.LAB")
+            data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
+            metadata = {EXEC_MIME_TYPE: {"server_id": self._server_info['server_id']}}
+            publish_display_data(data, metadata=metadata)
+        else:
+            self._logger.info("BokehSession.open_session:running in JupyterContext.NOTEBOOK")
+            display(HTML(script))
+            self._logger.debug("BokehSession.open_session.server spawn for session {}".format(self.uuid))
           
     def __spawn_server(self):
         bslg = logging.getLogger('bokeh.server.util')
         bsll = bslg.getEffectiveLevel()
         bslg.setLevel(logging.ERROR) 
         output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
-        self._server_info['application'] = app = Application(FunctionHandler(self.__session_entry_point))
+        self._server_info['application'] = app = Application(FunctionHandler(self.__entry_point))
         app.add(BokehSessionHandler())
         self._server_info['server'] = srv = Server({'/': app}, io_loop=IOLoop.instance(), port=0, allow_websocket_origin=['*'])
         self._server_info['server_id'] = srv_id = uuid4().hex
@@ -294,12 +281,11 @@ class BokehSession(object):
         srv.start()
         bslg.setLevel(bsll)
     
-    def __session_entry_point(self, doc):
+    def __entry_point(self, doc):
         try:
-            with BokehSession.__sessions_lock__:
-                self._logger.debug("BokehSessionManager.session_entry_point for session {}".format(self.uuid))
-                self._doc = doc
-                self.setup_document()
+            self._logger.debug("BokehSession.entry_point for session {}".format(self.uuid))
+            self._doc = doc
+            self.setup_document()
         except Exception as e:
             self._logger.error(e)
         finally:
@@ -307,14 +293,23 @@ class BokehSession(object):
         
     def __close(self):
         # TODO: how to release every single resource associated with the session?
-        self._logger.debug("BokehSessionManager.closing session {}".format(self.uuid))
+        self._logger.debug("BokehSession.closing session {}".format(self.uuid))
         if self.server:
             try:
                 self.server.stop()
             except AssertionError as e:
                 # ignore bokeh "already stopped" error
                 pass
-            
+     
+    @staticmethod
+    def close_all():
+        with BokehSession.__repo_lock__:
+            for s in BokehSession.__repo__.values():
+                try:
+                    s.close()
+                except Exception as e:
+                    pass
+                    
     @staticmethod
     def print_repository_status():
         with BokehSession.__repo_lock__:
