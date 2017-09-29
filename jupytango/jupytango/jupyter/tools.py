@@ -19,9 +19,10 @@
 
 from __future__ import print_function
 import os
-import logging
-import time
 import sys
+import time
+import logging
+import traceback
 from contextlib import wraps, contextmanager
 from uuid import uuid4
 from IPython import get_ipython
@@ -219,6 +220,9 @@ class NotebookCellContent(object):
     def error(self, msg, *args, **kwargs):
         with self._output:
             self._logger.error(msg, *args, **kwargs)
+            exc_info = sys.exc_info()
+            traceback.print_exception(*exc_info)
+            del exc_info
 
     def critical(self, msg, *args, **kwargs):
         with self._output:
