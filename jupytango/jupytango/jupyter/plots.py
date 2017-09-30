@@ -2154,6 +2154,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             auto_start = kwargs.get('auto_start', True)
             if auto_start:
                 self._data_streamer.open()
+                self._data_streamer.start()
                 self.__on_freeze_unfreeze_clicked()
         except Exception as e:
             print(e)
@@ -2209,7 +2210,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._ea_output = ipw.Output(layout=self.l11a())
         self._ea_output.layout.border = "1px solid grey"
         self._ds_output = ipw.Output(layout=self.l11a())
-        self._ds_output.layout.border = "1px solid red"
+        #self._ds_output.layout.border = "1px solid red"
         self._controls = ipw.VBox([main_controls, self._ea_output, self._ds_output], layout=self.l01a())
         self.display(self._controls)
 

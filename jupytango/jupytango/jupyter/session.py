@@ -96,7 +96,7 @@ class BokehSession(object):
         # insert new session into the repo
         with BokehSession.__repo_lock__:
             BokehSession.__repo__[self._uuid] = self
-        BokehSession.print_repository_status()
+        #BokehSession.print_repository_status()
     
     def __close_existing_session(self):
         with BokehSession.__repo_lock__:
@@ -197,7 +197,7 @@ class BokehSession(object):
                     del BokehSession.__repo__[self._uuid]
                 except:
                     pass
-            BokehSession.print_repository_status()
+            #BokehSession.print_repository_status()
 
     def setup_document(self):
         """give the session a chance to setup the freshy created bokeh document"""
