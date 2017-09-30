@@ -66,7 +66,7 @@ except:
         
 from skimage.transform import rescale
 
-module_logger_name = "fs.client.jupyter.plots"
+plots_module_logger_name = "fs.client.jupyter.plots"
 
 # ------------------------------------------------------------------------------
 class Children(OrderedDict):
@@ -337,7 +337,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
     """single data stream channel"""
 
     def __init__(self, name, data_sources=None, model_properties=None):
-        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
+        NotebookCellContent.__init__(self, name, logger=logging.getLogger(plots_module_logger_name))
         DataStreamEventHandler.__init__(self, name)
         # associated bokeh session
         self._session = None
@@ -494,7 +494,7 @@ class BoxSelectionManager(NotebookCellContent):
 
     def __init__(self, selection_callback=None, reset_callback=None):
         self._uid = uuid4().hex
-        NotebookCellContent.__init__(self, str(self._uid), logger=logging.getLogger(module_logger_name))
+        NotebookCellContent.__init__(self, str(self._uid), logger=logging.getLogger(plots_module_logger_name))
         BoxSelectionManager.repository[self._uid] = self
         self._selection_callback = selection_callback
         self._reset_callback = reset_callback
@@ -1872,7 +1872,7 @@ class DataStream(NotebookCellContent, DataStreamEventHandler):
     """data stream interface"""
 
     def __init__(self, name, channels=None):
-        NotebookCellContent.__init__(self, name, logger=logging.getLogger(module_logger_name))
+        NotebookCellContent.__init__(self, name, logger=logging.getLogger(plots_module_logger_name))
         DataStreamEventHandler.__init__(self, name)
         # bokeh session
         self._session = None
@@ -1958,9 +1958,8 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         # route output to current cell
         NotebookCellContent.__init__(self,
                                      name,
-                                     output=output,
-                                     logger=logging.getLogger(module_logger_name),
-                                     )
+                                     logger=logging.getLogger(plots_module_logger_name),
+                                     output=output)
         DataStreamEventHandler.__init__(self, name)
         BokehSession.__init__(self)
         # a FIFO to store incoming DataStreamEvent
@@ -2067,7 +2066,6 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
     @tracer
     def setup_document(self):
         """add the data stream models to the bokeh document"""
-        self.debug("DataStreamer.setup_document <<")
         try:
             models = list()
             for ds in self._data_streams:
@@ -2089,7 +2087,6 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         except Exception as e:
             self.error(e)
             raise
-        self.debug("DataStreamer.setup_document >>")
 
     def handle_stream_event(self, event):
         assert (isinstance(event, DataStreamEvent))
@@ -2144,7 +2141,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             NotebookCellContent.__init__(self,
                                          name,
                                          output=kwargs.get('output', None),
-                                         logger=logging.getLogger(module_logger_name))
+                                         logger=logging.getLogger(plots_module_logger_name))
             DataStreamEventHandler.__init__(self, name)
             # start/stop/close button
             self.__setup_controls(data_streamer, **kwargs)

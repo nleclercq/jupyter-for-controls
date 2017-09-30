@@ -87,18 +87,7 @@ def enum(*sequential):
 
 # ------------------------------------------------------------------------------
 def tracer(fn):
-    def debug_trace(obj, message):
-        trace(obj.logger.debug, message)
-
-    def exception_trace(obj, exception):
-        trace(obj.logger.exception, exception)
-
-    def trace(function, message):
-        try:
-            function(message)
-        except Exception:
-            print(message)
-
+    
     @wraps(fn)
     def wrapper(self, *args, **kwargs):
         t0 = time.time()
@@ -106,14 +95,14 @@ def tracer(fn):
         if len(name) > 5:
             name = name[-5:]
         qualified_name = "{}.{}{}".format(self.__class__.__name__, fn.__name__, name)
-        debug_trace(self, "{} <<in".format(qualified_name))
+        self.debug("{} <<in".format(qualified_name))
         try:
             return fn(self, *args, **kwargs)
         except Exception as e:
-            exception_trace(self, e)
+            self.error(e)
         finally:
             dt = 1000 * (time.time() - t0)
-            debug_trace(self, "{} out>> [took: {:.2f} ms]".format(qualified_name, dt))
+            self.debug("{} out>> [took: {:.2f} ms]".format(qualified_name, dt))
 
     return wrapper
 
@@ -156,7 +145,7 @@ class NotebookCellContent(object):
         self._uid = uuid
         self._name = name if name is not None else str(uuid)
         self._output = CellOutput() if output is None else output
-        self._logger = logger if logger is not None else logging.getLogger(NotebookCellContent.default_logger)
+        self._logger = logger if logger else logging.getLogger(NotebookCellContent.default_logger)
 
     @property
     def name(self):
