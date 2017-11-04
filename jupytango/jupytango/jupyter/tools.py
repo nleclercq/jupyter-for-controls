@@ -130,8 +130,9 @@ class CellOutput(object):
         return False
 
     def clear_output(self):
-        clear_output()
-
+        with self:
+            clear_output()
+            
     def close(self):
         pass
 

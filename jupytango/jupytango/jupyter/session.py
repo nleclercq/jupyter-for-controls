@@ -19,23 +19,22 @@
 
 from __future__ import print_function
 
-import imp
 import logging
 import socket
-from threading import Lock, Condition
-from collections import deque
+from threading import Lock
 from uuid import uuid4
 
 from IPython.display import HTML, display, publish_display_data
 
 from tornado.ioloop import IOLoop
-        
-from bokeh.io import output_notebook, curstate, show
+
+from bokeh.io.state import curstate
+from bokeh.io import output_notebook
 from bokeh.resources import Resources
 from bokeh.application import Application
 from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import server_document
-from bokeh.util.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
+from bokeh.io.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
 
 from bokeh.server.server import Server
         
