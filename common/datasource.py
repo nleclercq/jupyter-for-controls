@@ -20,10 +20,13 @@
 from __future__ import print_function
 import numpy as np
 
-from fs.client.jupyter.tools import *  
-
 plots_module_logger_name = "fs.client.jupyter.datasource"
 
+# ------------------------------------------------------------------------------
+def enum(*sequential):
+    enums = dict(zip(sequential, range(len(sequential))))
+    enums['len'] = len(sequential)
+    return type('Enum', (), enums)
 
 # ------------------------------------------------------------------------------
 class ChannelData(object):
