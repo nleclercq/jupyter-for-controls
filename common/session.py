@@ -83,6 +83,8 @@ class BokehSession(object):
         self._server_info = dict()
         # the associated bokeh document (for experts only)
         self._doc = None
+        # periodic callback id
+        self._callback_id = None
         # periodic callback period in seconds - defaults to None (i.e. disabled)
         self._callback_period = None
         # periodic activity enabled?
@@ -234,11 +236,13 @@ class BokehSession(object):
 
     def __set_callback_period(self, cbp):
         try:
-            self.document.remove_periodic_callback(self.periodic_callback)
+            self.document.remove_periodic_callback(self._callback_id)
         except:
             pass
+        finally:
+            self._callback_id = None
         if cbp is not None:
-            self.document.add_periodic_callback(self.periodic_callback, max(100, int(1000. * cbp)))
+            self._callback_id = self.document.add_periodic_callback(self.periodic_callback, max(100, int(1000. * cbp)))
 
     def timeout_callback(self, cb, tmo):
         """call the specified callback after expiration of the specified timeout (in seconds)"""

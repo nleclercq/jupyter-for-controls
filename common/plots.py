@@ -781,7 +781,7 @@ class ScalarChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        # TODO: fkwargs['output_backend'] = 'webgl'
+        fkwargs['output_backend'] = 'webgl'
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
         fkwargs['toolbar_location'] = 'above'
@@ -960,7 +960,7 @@ class SpectrumChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        # TODO: fkwargs['output_backend'] = 'webgl'
+        fkwargs['output_backend'] = 'webgl'
         fkwargs['x_range'] = self._xsc.bokeh_range
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
@@ -1217,7 +1217,7 @@ class ImageChannel(Channel):
             self.__setup_undefined_scales(self._expected_image_shape)
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
-            # fkwargs['output_backend'] = 'webgl'
+            fkwargs['output_backend'] = 'webgl'
             xrg = Range1d()  # self._xsc.bokeh_range
             yrg = Range1d()  # self._ysc.bokeh_range
             # print("ImageChannel.{}:set initial x-range to ({:.04f}, {:.04f})".format(self.name, xrg.start, xrg.end))
