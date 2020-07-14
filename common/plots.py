@@ -207,7 +207,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
         self._session = None
         # data sources
         self._bad_source_cnt = 0
-        self._data_sources = Children(self, DataSource)
+        self._data_sources = None
         self.add_data_sources(data_sources)
         # model properties
         self._model_props = dict() if model_properties is None else model_properties
@@ -247,12 +247,15 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
 
     def add_data_source(self, ds):
         """add the specified data source to the channel"""
+        assert(self._data_sources is not None)
         if ds is not None:
             assert (isinstance(ds, DataSource))
             self._data_sources[ds.name] = ds
 
     def add_data_sources(self, ds):
         """add the specified data source to the channel"""
+        if self._data_sources is None:
+            self._data_sources = Children(self, DataSource)
         if ds is not None:
             assert (isinstance(ds, (list, tuple)))
             for s in ds:
@@ -696,7 +699,6 @@ class Scale(object):
                                                                                           self.step,
                                                                                           self.unit,
                                                                                           self.channel)
-
 
 # ------------------------------------------------------------------------------
 class ModelHelper(object):
@@ -1894,7 +1896,7 @@ class DataStreamer(NotebookCellContent, DataStreamEventHandler, BokehSession):
         self.debug("DataStreamer: closing Bokeh session...")
         # delegate the remaining actions to our super class (this is mandatory)
         try:
-            super(DataStreamer, self).cleanup(async=False)
+            super(DataStreamer, self).cleanup(False)
             self.debug("DataStreamer: Bokeh session closed")
         except Exception as e:
             self.error(e)
@@ -2000,8 +2002,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
             # route output to current cell
             NotebookCellContent.__init__(self,
                                          name,
-                                         output=kwargs.get('output', None),
-                                         logger=logging.getLogger(plots_module_logger_name))
+                                         output=kwargs.get('output', None))
             DataStreamEventHandler.__init__(self, name)
             # start/stop/close button
             self.__setup_controls(data_streamer, **kwargs)
@@ -2031,7 +2032,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         return ipw.FloatSlider(
             value=data_streamer.update_period,
             min=kwargs.get('min_refresh_period', 0.25),
-            max=kwargs.get('max_refresh_period', 5.0),
+            max=kwargs.get('max_refresh_period', 30.0),
             step=kwargs.get('step_refresh_period', 0.25),
             description='Update period (s)',
             disabled=False,
@@ -2094,16 +2095,20 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
     def __on_close_clicked(self, b=None):
         self.close()
 
-    def start(self):
+    def start(self, delay=0.):
         try:
-            self.info("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name))
-            self._data_streamer.start()
+            self.debug("DataStreamerController : starting DataStreamer {}".format(self._data_streamer.name[-10:]))
+            self._data_streamer.start(delay)
         except Exception as e:
             self.error(e)
 
+    def stop(self):
+        self.debug("DataStreamerController : stopping DataStreamer {}".format(self._data_streamer.name[-10:]))
+        pass
+        
     def close(self):
         try:
-            self.info("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name))
+            self.debug("DataStreamerController : closing DataStreamer {}".format(self._data_streamer.name[-10:]))
             self._data_streamer.close()
         except Exception as e:
             self.error(e)
@@ -2187,6 +2192,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         # route data streamer output to current cell
         self._data_streamer.output = self._ds_output
         # register event handler
-        events = [DataStreamEvent.Type.ERROR, DataStreamEvent.Type.RECOVER, DataStreamEvent.Type.EOS]
+        events = [DataStreamEvent.Type.ERROR, 
+                  DataStreamEvent.Type.RECOVER, 
+                  DataStreamEvent.Type.EOS]
         self._data_streamer.register_event_handler(self, events)
-

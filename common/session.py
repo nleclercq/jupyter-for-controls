@@ -35,7 +35,6 @@ from bokeh.application import Application
 from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import server_document
 from bokeh.io.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
-
 from bokeh.server.server import Server
         
 try:
@@ -46,27 +45,9 @@ except:
     except:
         from common.tools import JupyterContext, get_jupyter_context, NotebookCellContent
         
-session_module_logger_name = "fs.client.jupyter.session"
+session_module_logger_name = "common.session"
 
-output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=True)
-    
-# ------------------------------------------------------------------------------
-class BokehSessionHandler(Handler):
-    def on_server_loaded(self, server_context):
-        pass
-
-    def on_server_unloaded(self, server_context):
-        pass
-
-    def on_session_created(self, session_context):
-        pass
-
-    def on_session_destroyed(self, session_context):
-        pass
-
-    def modify_document(self, doc):
-        return doc
-
+output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=False)
 
 # ------------------------------------------------------------------------------
 class BokehSession(object):
@@ -169,15 +150,15 @@ class BokehSession(object):
         """open the session"""
         self.__open()
 
-    def close(self, async=True):
+    def close(self, async_mode=True):
         """close the session"""
-        self.cleanup(async)
+        self.cleanup(async_mode)
 
-    def cleanup(self, async=True):
+    def cleanup(self, async_mode=True):
         """cleanup the session"""
         # TODO: async cleanup required but might not be safe!
         self.pause()
-        if async:
+        if async_mode:
             self.safe_document_modifications(self.__cleanup)
         else:
             self.__cleanup()
@@ -276,7 +257,6 @@ class BokehSession(object):
         bsll = bslg.getEffectiveLevel()
         bslg.setLevel(logging.ERROR) 
         self._server_info['application'] = app = Application(FunctionHandler(self.__entry_point))
-        app.add(BokehSessionHandler())
         self._server_info['server'] = srv = Server({'/': app}, io_loop=IOLoop.instance(), port=0, allow_websocket_origin=['*'])
         self._server_info['server_id'] = srv_id = uuid4().hex
         curstate().uuid_to_server[srv_id] = srv
@@ -319,7 +299,7 @@ class BokehSession(object):
     def print_repository_status():
         with BokehSession.__repo_lock__:
             if len(BokehSession.__repo__):
-                print('BokehSession.repository. contains {} session(s):'.format(len(BokehSession.__repo__)))
+                print('BokehSession.repository contains {} session(s):'.format(len(BokehSession.__repo__)))
                 for s in BokehSession.__repo__.values():
                     print('- {}'.format(s))
             else:
