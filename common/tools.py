@@ -18,6 +18,7 @@
 # ===========================================================================
 
 from __future__ import print_function
+
 import os
 import sys
 import time
@@ -164,7 +165,12 @@ class NotebookCellContent(object):
         self._name = name if name is not None else str(uuid)
         self._output = CellOutput() if output is None else output
         self._logger = logger if logger else logging.getLogger(NotebookCellContent.default_logger)
-
+        try:
+            # no default handler workaround 
+            h = self._logger.handlers[0]
+        except IndexError:
+            logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
+            
     @property
     def name(self):
         return self._name
