@@ -2046,6 +2046,8 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
     def __setup_controls(self, data_streamer, **kwargs):
         self._error_area = None
         self._error_area_enabled = kwargs.get('error_area_enabled', True)
+        if self._error_area_enabled:
+            self._error_area = ipw.Textarea(value="", rows=3, layout=self.l11a(), placeholder="Everything's up and running...") 
         if kwargs.get('up_slider_enabled', True):
             self._up_slider = self.__setup_update_period_slider(data_streamer, **kwargs)
             self._up_slider.observe(self.__on_refresh_period_changed, names='value')
@@ -2069,7 +2071,10 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         widgets_list.extend([self._freeze_unfreeze_button, self._close_button])
         main_controls = ipw.HBox(widgets_list, layout=self.l01a())
         self._ea_output = ipw.Output(layout=self.l11a())
-        self._ea_output.layout.border = "1px solid grey"
+        with self._ea_output:
+            display(self._error_area)
+        #self._ea_output.layout.visibility = 'visible'
+        #self._ea_output.layout.border = "1px solid grey"
         self._ds_output = ipw.Output(layout=self.l11a())
         #self._ds_output.layout.border = "1px solid red"
         self._controls = ipw.VBox([main_controls, self._ea_output, self._ds_output], layout=self.l01a())
@@ -2157,27 +2162,47 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._close_button.style.button_color = '#FF0000'
         self._freeze_unfreeze_button.style.button_color = '#FF0000'
 
+
     def _show_error(self, err_desc):
+        if self._error_area is None:
+            return
+        err = "Oops, the following error occurred:\n" + err_desc
+        self._error_area.value = err
+        self._error_area.rows = 3
+        self._error_area.disabled = False
+        self._error_area.visibility = 'visible'
+        
+    def _hide_error(self):
+        if self._error_area is None:
+            return
+        self._error_area.value = ""
+        self._error_area.rows = 1
+        self._error_area.disabled = True
+        self._error_area.visibility = 'hidden'
+
+    def _show_error_old_to_be_deleted(self, err_desc):
         if not self._error_area_enabled:
             return
         err = "Oops, the following error occurred:\n"
         err += err_desc
         if self._error_area is None:
             self._error_area = ipw.Textarea(value=err, rows=3, layout=self.l11a()) 
+            self._ea_output.visibility = 'visible'
             with self._ea_output:
                 display(self._error_area)
         else:
             self._error_area.value = err
             self._error_area.rows = 3
             self._error_area.disabled = False
-        self._ea_output.layout.border = ""
+        
 
-    def _hide_error(self):
+    def _hide_error_old_to_be_deleted(self):
         if self._error_area:
             self._error_area.close()
             self._error_area = None
         self._ea_output.clear_output()
-        self._ea_output.layout.border = "1px solid grey"
+        #self._ea_output.layout.border = "1px solid grey"
+        self._ea_output.visibility = 'hidden'
 
     @property
     def data_streamer(self):
