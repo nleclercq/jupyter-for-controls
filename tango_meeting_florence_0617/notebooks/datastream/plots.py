@@ -15,7 +15,7 @@ from IPython.display import HTML
 
 from bokeh.application import Application
 from bokeh.application.handlers import FunctionHandler
-from bokeh.embed import autoload_server
+from bokeh.embed import server_document
 from bokeh.io import output_notebook, reset_output
 from bokeh.layouts import column, layout, gridplot
 from bokeh.models import ColumnDataSource, CustomJS, DatetimeTickFormatter
@@ -24,7 +24,7 @@ from bokeh.models.glyphs import Rect
 from bokeh.models.mappers import LinearColorMapper
 from bokeh.models.ranges import Range1d
 from bokeh.models.tools import BoxSelectTool, HoverTool, CrosshairTool
-from bokeh.models.tools import ResetTool, PanTool, BoxZoomTool, ResizeTool
+from bokeh.models.tools import ResetTool, PanTool, BoxZoomTool
 from bokeh.models.tools import WheelZoomTool, SaveTool
 from bokeh.palettes import Plasma256
 from bokeh.plotting import figure
@@ -583,7 +583,7 @@ class DataStreamer(CellChild, DataStreamEventHandler):
         self._srv.start()
         if not self._ip_addr:
             self._ip_addr = socket.gethostbyname(socket.gethostname())
-        script = autoload_server(model=None, url='http://{}:{}'.format(self._ip_addr, self._srv.port))
+        script = server_document('http://{}:{}'.format(self._ip_addr, self._srv.port))
         self._html_display = HTML(script)
         display(self._html_display)
         self.debug("Bokeh server successfully started")
@@ -1281,7 +1281,6 @@ class ScalarChannel(Channel):
         figure.add_tools(PanTool())
         figure.add_tools(BoxZoomTool())
         figure.add_tools(WheelZoomTool())
-        figure.add_tools(ResizeTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
         figure.add_tools(HoverTool(tooltips=htt))
@@ -1293,7 +1292,6 @@ class ScalarChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        fkwargs['webgl'] = True
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
         fkwargs['toolbar_location'] = 'above'
@@ -1323,7 +1321,7 @@ class ScalarChannel(Channel):
         figure.line(**kwargs)
         kwargs['size'] = 3
         kwargs['line_color'] = ModelHelper.line_color(self._ngl + 1)
-        kwargs['legend'] = None if not show_legend else data_source + ' '
+        kwargs['legend_label'] = None if not show_legend else data_source + ' '
         figure.circle(**kwargs)
         self._ngl += 1
 
@@ -1452,7 +1450,6 @@ class SpectrumChannel(Channel):
         figure.add_tools(PanTool())
         figure.add_tools(BoxZoomTool())
         figure.add_tools(WheelZoomTool())
-        figure.add_tools(ResizeTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
         figure.add_tools(HoverTool(tooltips=htt))
@@ -1464,7 +1461,6 @@ class SpectrumChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        fkwargs['webgl'] = True
         fkwargs['x_range'] = self._xsc.range
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
@@ -1489,43 +1485,47 @@ class SpectrumChannel(Channel):
         kwargs['y'] = data_source
         kwargs['source'] = self._cds
         kwargs['line_color'] = ModelHelper.line_color(self._ngl)
-        kwargs['legend'] = None if not show_legend else data_source + ' '
+        kwargs['legend_label'] = None if not show_legend else data_source + ' '
         figure.line(**kwargs)
         self._ngl += 1
 
     def setup_model(self, **kwargs):
         """asks the channel to setup then return its Bokeh associated model - returns None if no model"""
-        self._mdl = None
-        props = self._merge_properties(self.model_properties, kwargs)
-        # x scale parameters
-        self._xsc = props.get('x_scale', Scale())
-        self._xsc.validate()
-        # y scale parameters
-        self._ysc = props.get('y_scale', Scale())
-        self._ysc.validate()
-        # if specified, x_channel must be one of our children
-        self._xsn = self.__validate_x_channel()
-        # instanciate the ColumnDataSource
-        self._cds = self.__instanciate_data_source()
-        # setup figure
-        show_title = True if len(self.data_sources) == 1 else False
-        show_title = props.get('show_title', show_title)
-        props['show_title'] = show_title
-        f = self.__setup_figure(**props)
-        # setup glyphs
-        show_legend = False if len(self.data_sources) == 1 else True
-        show_legend = props.get('show_legend', show_legend)
-        for data_source in self.data_sources:
-            if data_source != self._xsn:
-                self.__setup_glyph(f, data_source, show_legend)
-        # setup the legend
-        if show_legend:
-            self.__setup_legend(f)
-        # setup the toolbar
-        self.__setup_toolbar(f)
-        # store figure
-        self._mdl = f
-        return self._mdl
+        try:
+            self._mdl = None
+            props = self._merge_properties(self.model_properties, kwargs)
+            # x scale parameters
+            self._xsc = props.get('x_scale', Scale())
+            self._xsc.validate()
+            # y scale parameters
+            self._ysc = props.get('y_scale', Scale())
+            self._ysc.validate()
+            # if specified, x_channel must be one of our children
+            self._xsn = self.__validate_x_channel()
+            # instanciate the ColumnDataSource
+            self._cds = self.__instanciate_data_source()
+            # setup figure
+            show_title = True if len(self.data_sources) == 1 else False
+            show_title = props.get('show_title', show_title)
+            props['show_title'] = show_title
+            f = self.__setup_figure(**props)
+            # setup glyphs
+            show_legend = False if len(self.data_sources) == 1 else True
+            show_legend = props.get('show_legend', show_legend)
+            for data_source in self.data_sources:
+                if data_source != self._xsn:
+                    self.__setup_glyph(f, data_source, show_legend)
+            # setup the legend
+            if show_legend:
+                self.__setup_legend(f)
+            # setup the toolbar
+            self.__setup_toolbar(f)
+            # store figure
+            self._mdl = f
+            return self._mdl
+        except Exception as e:
+            print(e)
+            raise e
 
     def update(self):
         """gives each Channel a chance to update itself (e.g. to update the ColumDataSources)"""
@@ -1648,7 +1648,6 @@ class ImageChannel(Channel):
         figure.add_tools(BoxZoomTool())
         figure.add_tools(WheelZoomTool())
         figure.add_tools(BoxSelectTool())
-        figure.add_tools(ResizeTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
         figure.add_tools(HoverTool(tooltips=htt, renderers=hrd, point_policy=hpp, callback=hcb))
