@@ -2180,30 +2180,6 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._error_area.disabled = True
         self._error_area.visibility = 'hidden'
 
-    def _show_error_old_to_be_deleted(self, err_desc):
-        if not self._error_area_enabled:
-            return
-        err = "Oops, the following error occurred:\n"
-        err += err_desc
-        if self._error_area is None:
-            self._error_area = ipw.Textarea(value=err, rows=3, layout=self.l11a()) 
-            self._ea_output.visibility = 'visible'
-            with self._ea_output:
-                display(self._error_area)
-        else:
-            self._error_area.value = err
-            self._error_area.rows = 3
-            self._error_area.disabled = False
-        
-
-    def _hide_error_old_to_be_deleted(self):
-        if self._error_area:
-            self._error_area.close()
-            self._error_area = None
-        self._ea_output.clear_output()
-        #self._ea_output.layout.border = "1px solid grey"
-        self._ea_output.visibility = 'hidden'
-
     @property
     def data_streamer(self):
         return self._data_streamer
