@@ -409,35 +409,47 @@ class BoxSelectionManager(NotebookCellContent):
 
     def register_figure(self, bkh_figure):
         try:
-            bkh_figure.js_on_event(bokeh.events.SelectionGeometry, self.__box_selection_callback())
-            bkh_figure.on_event(bokeh.events.SelectionGeometry, self.__print_event(attributes=['geometry', 'final']))
+            bkh_figure.js_on_event(bokeh.events.SelectionGeometry, self.__box_selection_js_callback())
+            bkh_figure.on_event(bokeh.events.SelectionGeometry, self.__box_selection_py_callback())
         except Exception as e:
             self.error(e)
         try:
-            bkh_figure.js_on_event(bokeh.events.Reset, self.__reset_callback())
-            bkh_figure.on_event(bokeh.events.Reset, self.__print_event())
+            bkh_figure.js_on_event(bokeh.events.Reset, self.__reset_js_callback())
+            bkh_figure.on_event(bokeh.events.Reset, self.__reset_py_callback())
         except Exception as e:
             self.error(e)
         rect = self.__selection_glyph()
         bkh_figure.add_glyph(self._selection_cds, glyph=rect, selection_glyph=rect, nonselection_glyph=rect)
 
-    def __print_event(self, attributes=list()):
-        def python_callback(event):
-            cls_name = event.__class__.__name__
-            attrs = ', '.join(['{attr}={val}'.format(attr=attr, val=event.__dict__[attr]) for attr in attributes])
-            self.error('{cls_name}({attrs})'.format(cls_name=cls_name, attrs=attrs))
-        return python_callback
+    def __box_selection_py_callback(self):
+        def server_side_python_callback(event):
+            try:
+                if self._selection_callback:
+                    self._selection_callback(self.__selection_range(event.geometry))
+            except Exception as e:
+                self.error(e)
+        return server_side_python_callback
 
-    def __box_selection_callback(self):
+    def __selection_range(self, geometry):
+        x0 = geometry['x0']
+        x1 = geometry['x1']
+        y0 = geometry['y0']
+        y1 = geometry['y1']
+        w = abs(geometry['x1'] - geometry['x0'])
+        h = abs(geometry['y1'] - geometry['y0'])
+        return {'x0': x0, 'x1': x1, 'y0': y0, 'y1': y1, 'width': w, 'height': h}
+
+    def __reset_py_callback(self, attributes=list()):
+        def server_side_python_callback(event):
+            try:
+                if self._reset_callback:
+                    self._reset_callback()
+            except Exception as e:
+                self.error(e)
+        return server_side_python_callback
+
+    def __box_selection_js_callback(self):
         return CustomJS(args=dict(cds=self._selection_cds), code="""
-            function handle_output(data) {
-                console.log(data)
-            }
-            var callbacks = {
-                    iopub : {
-                        output : handle_output,
-                }
-            }
             var geometry = cb_obj['geometry']
             var width = geometry['x1'] - geometry['x0']
             var height = geometry['y1'] - geometry['y0']
@@ -447,50 +459,18 @@ class BoxSelectionManager(NotebookCellContent):
             cds.data['y0'][0] = y0
             cds.data['width'][0] = width
             cds.data['height'][0] = height
+            console.log("ds.data: ", cds.data)
             cds.change.emit()
-            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
-            var pfx = "BoxSelectionManager.repository['".concat(cds.tags[0], "'].on_selection_change(")
-            var arg = JSON.stringify({'x0':[x0], 'y0':[y0], 'width':[width], 'height':[height]})
-            var sfx = ")"
-            var cmd  = imp.concat(pfx, arg, sfx)
-            console.log(cmd)
-            IPython.notebook.kernel.execute(cmd, callbacks)
         """)
 
-    def __reset_callback(self):
+    def __reset_js_callback(self):
         return CustomJS(args=dict(cds=self._selection_cds), code="""
             cds.data['x0'][0] = 0
             cds.data['y0'][0] = 0
             cds.data['width'][0] = 0
             cds.data['height'][0] = 0
             cds.change.emit()
-            var imp = "from fs.client.jupyter.plots import BoxSelectionManager;"
-            var rst = "BoxSelectionManager.repository['".concat(cds.tags[0],"'].on_selection_reset()")
-            var cmd  = imp.concat(rst)
-            console.log(cmd)
-            Jupyter.notebook.kernel.execute(cmd)
         """)
-
-    @staticmethod
-    def __selection_range(selection):
-        w = selection['width'][0]
-        h = selection['height'][0]
-        x0 = selection['x0'][0] - w / 2.
-        x1 = selection['x0'][0] + w / 2.
-        y0 = selection['y0'][0] - h / 2.
-        y1 = selection['y0'][0] + h / 2.
-        return {'x0': x0, 'x1': x1, 'y0': y0, 'y1': y1, 'width': w, 'height': h}
-
-    def on_selection_change(self, selection):
-        try:
-            if self._selection_callback:
-                self._selection_callback(self.__selection_range(selection))
-        except Exception as e:
-            self.error(e)
-
-    def on_selection_reset(self):
-        if self._reset_callback:
-            self._reset_callback()
 
 
 # ------------------------------------------------------------------------------
@@ -1260,11 +1240,12 @@ class ImageChannel(Channel):
             self.__setup_toolbar(f, fkwargs['width'], fkwargs['height'])
             self._mdl = f
             bsm = props.get('selection_manager', None)
-            if bsm:
+            if bsm is not None:
                 bsm.register_figure(f)
             self._itm.setup(self.bokeh_session, self._mdl, self.__handle_range_change)
         except Exception as e:
             self.error(e)
+            raise e
         return self._mdl
 
     def __setup_undefined_scales(self, img_shape):
