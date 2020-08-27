@@ -2029,7 +2029,7 @@ class DataStreamerController(NotebookCellContent, DataStreamEventHandler):
         self._error_area = None
         self._error_area_enabled = kwargs.get('error_area_enabled', True)
         if self._error_area_enabled:
-            self._error_area = ipw.Textarea(value="", rows=3, layout=self.l11a(), placeholder="Everything's up and running...") 
+            self._error_area = ipw.Textarea(value="", rows=1, layout=self.l11a(), placeholder="Everything's up and running...") 
         if kwargs.get('up_slider_enabled', True):
             self._up_slider = self.__setup_update_period_slider(data_streamer, **kwargs)
             self._up_slider.observe(self.__on_refresh_period_changed, names='value')
