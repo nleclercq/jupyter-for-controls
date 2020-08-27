@@ -47,7 +47,7 @@ except:
         
 session_module_logger_name = "common.session"
 
-output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), hide_banner=False)
+output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), verbose=False, hide_banner=True)
 
 # ------------------------------------------------------------------------------
 class BokehSession(object):

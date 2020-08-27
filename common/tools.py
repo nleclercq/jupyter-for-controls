@@ -105,7 +105,6 @@ class timer(object):
 
 # ------------------------------------------------------------------------------
 def tracer(fn):
-    
     @wraps(fn)
     def wrapper(self, *args, **kwargs):
         t0 = time.time()
@@ -121,7 +120,6 @@ def tracer(fn):
         finally:
             dt = 1000 * (time.time() - t0)
             self.debug("{} out>> [took: {:.2f} ms]".format(qualified_name, dt))
-
     return wrapper
 
 
@@ -238,8 +236,9 @@ class NotebookCellContent(object):
         with self._output:
             self._logger.error(msg, *args, **kwargs)
             exc_info = sys.exc_info()
-            traceback.print_exception(*exc_info)
-            del exc_info
+            if exc_info is not None:
+                traceback.print_exception(*exc_info)
+                del exc_info
 
     def critical(self, msg, *args, **kwargs):
         with self._output:
