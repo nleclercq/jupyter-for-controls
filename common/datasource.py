@@ -20,13 +20,11 @@
 from __future__ import print_function
 import numpy as np
 
-plots_module_logger_name = "fs.client.jupyter.datasource"
+from common.tools import *  
 
 # ------------------------------------------------------------------------------
-def enum(*sequential):
-    enums = dict(zip(sequential, range(len(sequential))))
-    enums['len'] = len(sequential)
-    return type('Enum', (), enums)
+module_logger = logging.getLogger(__name__)
+
 
 # ------------------------------------------------------------------------------
 class ChannelData(object):
@@ -122,11 +120,11 @@ class ChannelData(object):
         self._error = "no error"
         self._exception = None
 
-    def set_error(self, err, exc):
+    def set_error(self, err=None, exc=None):
         if not self._has_failed:
             self._has_failed = True
-            self._error = "unknown error" if not err else err
-            self._exception = Exception("unknown error") if not exc else exc
+            self._error = "unknown error" if err is None else err
+            self._exception = Exception("unknown error") if exc is None else exc
             self.__reset_data()
 
     def __reset_data(self):

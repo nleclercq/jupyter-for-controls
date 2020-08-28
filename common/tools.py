@@ -29,14 +29,6 @@ from uuid import uuid4
 from IPython import get_ipython
 from IPython.display import display, clear_output
 
-try:
-    logging.getLogger().handlers[0]
-except IndexError:
-    #logging.basicConfig(format="[%(asctime)-15s] %(name)s: %(message)s", level=logging.ERROR)
-    pass
-except:
-    pass
-
 # ------------------------------------------------------------------------------
 def enum(*sequential):
     enums = dict(zip(sequential, range(len(sequential))))
@@ -45,7 +37,7 @@ def enum(*sequential):
 
 
 # ------------------------------------------------------------------------------
-JupyterContext = enum('LAB', 'NOTEBOOK', 'CONSOLE')
+JupyterContext = enum('LAB', 'NOTEBOOK', 'CONSOLE', 'UNKNOWN')
 
 
 # ------------------------------------------------------------------------------

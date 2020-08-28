@@ -45,7 +45,7 @@ except:
     except:
         from common.tools import JupyterContext, get_jupyter_context, NotebookCellContent
         
-session_module_logger_name = "common.session"
+module_logger = logging.getLogger(__name__)
 
 output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), verbose=False, hide_banner=True)
 
@@ -59,7 +59,7 @@ class BokehSession(object):
         # session identifier
         self._uuid = uuid if uuid else str(uuid4().hex)
         # logger
-        self._session_logger = NotebookCellContent(self._uuid, logger=logging.getLogger(session_module_logger_name)) 
+        self._session_logger = NotebookCellContent(self._uuid, logger=module_logger) 
         # the session info
         self._server_info = dict()
         # the associated bokeh document (for experts only)
@@ -243,12 +243,12 @@ class BokehSession(object):
         self.__spawn_server()
         script = server_document(url=self._server_info['server_url'])
         if get_jupyter_context() == JupyterContext.LAB:
-            self._session_logger.info("BokehSession.open_session:running in JupyterContext.LAB")
+            self._session_logger.debug("BokehSession.open_session:running in JupyterContext.LAB")
             data = {HTML_MIME_TYPE: script, EXEC_MIME_TYPE: ""}
             metadata = {EXEC_MIME_TYPE: {"server_id": self._server_info['server_id']}}
             publish_display_data(data, metadata=metadata)
         else:
-            self._session_logger.info("BokehSession.open_session:running in JupyterContext.NOTEBOOK")
+            self._session_logger.debug("BokehSession.open_session:running in JupyterContext.NOTEBOOK")
             display(HTML(script))
         self._session_logger.debug("BokehSession.open_session.server spawn for session {}".format(self.uuid[-5:]))
   
