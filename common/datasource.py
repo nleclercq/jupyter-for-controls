@@ -46,10 +46,10 @@ class ChannelData(object):
         self._buffer = np.zeros((1, 1))
         # time buffer (numpy ndarray)
         self._time_buffer = None
-        # update failed - data is invalid
-        self._has_failed = False
-        # has new data (updated since last read)
-        self.has_been_updated = False
+        # error flag (error could have occured but data can be valid)
+        self._has_error = False
+        # data flag 
+        self._has_valid_data = False
         # error txt
         self._error = "no error"
         # exception caught
@@ -64,8 +64,8 @@ class ChannelData(object):
         return self._format
 
     @property
-    def has_failed(self):
-        return self._has_failed
+    def has_error(self):
+        return self._has_error
 
     @property
     def error(self):
@@ -76,8 +76,8 @@ class ChannelData(object):
         return self._exception
 
     @property
-    def is_valid(self):
-        return not self._has_failed and self._buffer is not None
+    def has_valid_data(self):
+        return self._has_valid_data
 
     @property
     def dim_x(self):
@@ -102,6 +102,7 @@ class ChannelData(object):
     @buffer.setter
     def buffer(self, b):
         self._buffer = b
+        self._has_valid_data = True
 
     @property
     def time_buffer(self):
@@ -109,28 +110,27 @@ class ChannelData(object):
 
     def set_data(self, data_buffer, time_buffer=None, format=None):
         assert (isinstance(data_buffer, np.ndarray))
+        #TODO: check data & time buffers have same size 
         self._buffer = data_buffer
         self._time_buffer = time_buffer
         self._format = format
-        self.has_been_updated = True
-        self.reset_error()
+        self._has_valid_data = True
 
-    def reset_error(self):
-        self._has_failed = False
-        self._error = "no error"
-        self._exception = None
-
-    def set_error(self, err=None, exc=None):
-        if not self._has_failed:
-            self._has_failed = True
-            self._error = "unknown error" if err is None else err
-            self._exception = Exception("unknown error") if exc is None else exc
-            self.__reset_data()
-
-    def __reset_data(self):
+    def clear_data(self):
         self._buffer = None
         self._time_buffer = None
-        self._has_been_updated = False
+        self._has_valid_data = False
+
+    def set_error(self, err=None, exc=None, rst_data=False):
+        if not self._has_error:
+            self._has_error = True
+            self._error = "unknown error" if err is None else err
+            self._exception = Exception("unknown error") if exc is None else exc
+
+    def clear_error(self):
+        self._has_error = False
+        self._error = "no error"
+        self._exception = None
         
 
 # ------------------------------------------------------------------------------

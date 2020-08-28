@@ -1,3 +1,4 @@
+
 # ===========================================================================
 #  This file is part of the Tango Ecosystem
 #
@@ -784,7 +785,7 @@ class ScalarChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        fkwargs['output_backend'] = 'webgl'
+        #fkwargs['output_backend'] = 'webgl'
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
         fkwargs['toolbar_location'] = 'above'
@@ -854,47 +855,54 @@ class ScalarChannel(Channel):
         # print('scalar channel update')
         try:
             # get data from each channel
-            data_buffer_len = 1
+            min_len = 2 ** 32 - 1
             data = dict()
             previous_bad_source_cnt = self._bad_source_cnt
             self._bad_source_cnt = 0
             for sn, si in six.iteritems(self.data_sources):
-                # print("pulling data from {}...".format(sn))
                 data[sn] = si.pull_data()
-                if data[sn].has_failed:
-                    # print("ko, pull_data returned error!")
+                if data[sn].has_error:
                     self._bad_source_cnt += 1
-                    self._animate_msg_label()
                     self.emit_error(data[sn])
                 else:
-                    # print("ok, pull_data returned valid data")
                     time_buffer_len = data[sn].time_buffer.shape[0]
                     data_buffer_len = data[sn].buffer.shape[0]
                     if time_buffer_len != data_buffer_len:
-                        data[sn].set_error(self, "ScalarChannel: inconsistent buffers length (time and data buffers must have same size)")
+                        self._bad_source_cnt += 1
+                        data[sn].set_error(self, "ScalarChannel: datat source returned inconsistent buffers (time and data buffers must have same size)")
                         self.emit_error(data[sn])
+                    min_len = min(min_len, data[sn].buffer.shape[0] if data[sn].has_valid_data else 1)
+                if data[sn].has_valid_data:
                     self._hide_msg_label()
             if not self._bad_source_cnt and previous_bad_source_cnt:
-                # print("emitting recover...")
                 self.emit_recover()
             updated_data = dict()
             time_scale_set = False
             for cn, ci in six.iteritems(self.data_sources):
-                if not data[cn].has_failed:
+                if data[cn].has_valid_data:
                     if not time_scale_set:
-                        updated_data['_@time@_'] = data[cn].time_buffer[-data_buffer_len:]
+                        updated_data['_@time@_'] = data[cn].time_buffer[-min_len:]
                         time_scale_set = True
-                    updated_data[cn] = data[cn].buffer[-data_buffer_len:]
-                    self._lrdr[cn].visible = True
-                    self._crdr[cn].visible = True
+                    updated_data[cn] = data[cn].buffer[-min_len:]
+                    #self._lrdr[cn].visible = True
+                    #self._crdr[cn].visible = True
+                    self._cds.data.update(updated_data)
                 else:
-                    updated_data['_@time@_'] = [math.nan]
-                    updated_data[cn] = [math.nan]
-                    self._lrdr[cn].visible = False
-                    self._crdr[cn].visible = False
-            self._cds.data.update(updated_data)
+                    try:
+                        if not time_scale_set:
+                            updated_data['_@time@_'] = self._cds.data['_@time@_']
+                            updated_data['_@time@_'].append(time.time() * 1000.)
+                            time_scale_set = True
+                        updated_data[cn] = self._cds.data[cn]
+                        updated_data[cn].append(math.nan)
+                        self._cds.data.update(updated_data)
+                    except:
+                        #self._lrdr[cn].visible = False
+                        #self._crdr[cn].visible = False
+                        pass
         except Exception as e:
-            self.error(e)
+            #self.error(e)
+            print(e)
 
     def cleanup(self):
         self.__reinitialize()
@@ -969,7 +977,7 @@ class SpectrumChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        fkwargs['output_backend'] = 'webgl'
+        #fkwargs['output_backend'] = 'webgl'
         fkwargs['x_range'] = self._xsc.bokeh_range
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
@@ -1052,7 +1060,7 @@ class SpectrumChannel(Channel):
             for sn, si in six.iteritems(self.data_sources):
                 # print("pulling data from {}...".format(sn))
                 data[sn] = sd = si.pull_data()
-                if sd.has_failed or sd.buffer is None:
+                if sd.has_error or not sd.has_valid_data:
                     self._bad_source_cnt += 1
                     self._animate_msg_label()
                     # print("emitting error...")
@@ -1232,7 +1240,7 @@ class ImageChannel(Channel):
             # self.__setup_undefined_scales(self._expected_image_shape) #TODO: add an option for that
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
-            fkwargs['output_backend'] = 'webgl'
+            #fkwargs['output_backend'] = 'webgl'
             xrg = Range1d()  # self._xsc.bokeh_range
             yrg = Range1d()  # self._ysc.bokeh_range
             # print("ImageChannel.{}:set initial x-range to ({:.04f}, {:.04f})".format(self.name, xrg.start, xrg.end))
@@ -1302,7 +1310,7 @@ class ImageChannel(Channel):
     def __handle_range_change(self):
         try:
             sd = self._sd
-            if not sd or sd.has_failed or not sum(sd.buffer.shape):
+            if not sd or sd.has_error or not sum(sd.buffer.shape):
                 return
             # print("ImageChannel.{}:handle_range_change: x-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.x_range.start, self._mdl.x_range.end))
             # print("ImageChannel.{}:handle_range_change: y-range changed to ({:.04f}, {:.04f})".format(self.name, self._mdl.y_range.start, self._mdl.y_range.end))
@@ -1404,13 +1412,13 @@ class ImageChannel(Channel):
                 self._sd = ds.pull_data()
             sd = self._sd
             previous_bad_source_cnt = self._bad_source_cnt
-            if sd.has_failed:
+            if sd.has_error:
                 self._bad_source_cnt = 1
                 self.emit_error(sd)
             elif previous_bad_source_cnt:
                 self._bad_source_cnt = 0
                 self.emit_recover()
-            empty_buffer = sd.has_failed or not all(sd.buffer.shape)
+            empty_buffer = sd.has_error or not all(sd.buffer.shape)
             nan_buffer = None
             if empty_buffer:
                 nan_buffer = np.empty((2, 2))
@@ -1538,7 +1546,7 @@ class GenericChannel(Channel):
                 return
             sd = ds.pull_data()
             previous_bad_source_cnt = self._bad_source_cnt
-            if sd.has_failed:
+            if sd.has_error:
                 self._bad_source_cnt = 1
                 self.emit_error(sd)
                 return
