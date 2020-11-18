@@ -3,24 +3,6 @@ import time
 import numpy
 import PyTango as tango
 
-# def convert_dtype(dtype):
-#     """Returns the corresponding Tango type from a numpy dtype"""
-#     if dtype.str.startswith('|S'):
-#         return tango.DevString
-#     return {
-#         '|b1': tango.DevBoolean,
-#         '|i1': tango.DevUChar,
-#         '|u1': tango.DevUChar,
-#         '<i2': tango.DevShort,
-#         '<u2': tango.DevUShort,
-#         '<i4': tango.DevLong,
-#         '<u4': tango.DevULong,
-#         '<i8': tango.DevLong64,
-#         '<u8': tango.DevULong64,
-#         '<f4': tango.DevFloat,
-#         '<f8': tango.DevDouble,
-#     }[dtype.str]
-
 # ------------------------------------------------------------------------------
 TANGO_TYPES = {
     numpy.bool_: tango.DevBoolean,

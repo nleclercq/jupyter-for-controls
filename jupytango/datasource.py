@@ -20,7 +20,7 @@
 from __future__ import print_function
 import numpy as np
 
-from common.tools import *  
+from jupytango.tools import *  
 
 # ------------------------------------------------------------------------------
 module_logger = logging.getLogger(__name__)

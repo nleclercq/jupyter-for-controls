@@ -1,24 +1,4 @@
-# ===========================================================================
-#  This file is part of the Tango Ecosystem
-#
-#  Copyright 2017-EOT Synchrotron SOLEIL, St.Aubin, France
-#
-#  This is free software: you can redistribute it and/or modify it under the
-#  terms of the GNU Lesser General Public License as published by the Free
-#  Software Foundation, either version 3 of the License, or (at your option)
-#  any later version.
-#
-#  This is distributed in the hope that it will be useful, but WITHOUT ANY
-#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-#  FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
-#  more details.
-#
-#  You should have received a copy of the GNU Lesser General Public License
-#  along with This.  If not, see <http://www.gnu.org/licenses/>.
-# ===========================================================================
-
 from __future__ import print_function
-
 import logging
 import socket
 from threading import Lock
@@ -36,15 +16,9 @@ from bokeh.application.handlers import Handler, FunctionHandler
 from bokeh.embed import server_document
 from bokeh.io.notebook import EXEC_MIME_TYPE, HTML_MIME_TYPE
 from bokeh.server.server import Server
-        
-try:
-    from fs.client.jupyter.tools import JupyterContext, get_jupyter_context, NotebookCellContent
-except:
-    try: 
-        from jupytango.jupyter.tools import JupyterContext, get_jupyter_context, NotebookCellContent
-    except:
-        from common.tools import JupyterContext, get_jupyter_context, NotebookCellContent
-        
+
+from jupytango.tools import JupyterContext, get_jupyter_context, NotebookCellContent
+
 module_logger = logging.getLogger(__name__)
 
 output_notebook(Resources(mode='inline', components=["bokeh", "bokeh-gl"]), verbose=False, hide_banner=True)

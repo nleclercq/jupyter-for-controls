@@ -48,10 +48,9 @@ from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
 import bokeh.events
 
-
-from common.tools import *
-from common.datasource import *
-from common.session import BokehSession
+from jupytango.tools import *
+from jupytango.datasource import *
+from jupytango.session import BokehSession
         
 from skimage.transform import rescale
 

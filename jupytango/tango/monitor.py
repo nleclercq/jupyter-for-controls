@@ -30,6 +30,7 @@ bokeh_redirected = False
 
 # ------------------------------------------------------------------------------
 tango_monitors = dict()
+tango_attribute_plots = dict()
 
 # ------------------------------------------------------------------------------
 def redirect_bokeh_output(force=False):
