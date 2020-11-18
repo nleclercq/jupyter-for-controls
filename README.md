@@ -80,6 +80,7 @@ Here is a step by step jupyTango installation procedure.
 
 ## opening a jupyTango notebook
 - Open a terminal 
+- Be sure that jupyTango is in your PYTHONPATH: e.g. `export PYTHONPATH=$HOME/projects/jupyter-for-controls`
 - Specify the jupyTango context by typing: `export JUPYTER_CONTEXT=LAB` (this will be removed in a near future)
 - Start jupyterlab by typing: `jupyter-lab` (will spawn a web browser instance)
 - From the `Launcher` tab of the web browser `JupyterLab` tab, open a `jupyTango` notebook (click on the `J` icon)
