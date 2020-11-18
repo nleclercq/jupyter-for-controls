@@ -1,7 +1,7 @@
 # **jupyter-for-controls**
 Small projects, evaluations, POC, presentations, ... related to the Jupyter Ecosystem (and 'embeddable' technologies, e.g. bokeh) for scientific experiments controls.
 
-# **jupyTango**
+# **jupyTango on Ubuntu Linux**
 ### **leveraging pytango, itango and bokeh features in the Jupyter notebook**
 
 ## About this notebook
@@ -19,6 +19,10 @@ This notebook is a tutorial on "How to provide amazing Tango releated features i
 
 ## jupyTango installation
 Here is a step by step jupyTango installation procedure.
+
+#### Step-00: (if required) follow the tango installation procedure for [ubuntu](https://tango-controls.readthedocs.io/en/latest/installation/tango-on-linux.html#debian-ubuntu)
+- `sudo apt install mariadb-server`
+- `sudo apt install tango-db tango-test`
 
 #### Step-01: install [anaconda](https://www.anaconda.com/products/individual)
 - create a dedicated jupytango environment (optional but recommended): `conda create -n jupytango python=3.7`
