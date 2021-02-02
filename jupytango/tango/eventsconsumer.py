@@ -1,7 +1,13 @@
 from __future__ import print_function
 import os
 import logging
-from PyTango import EventType, EventData, DeviceProxy, AttrConfEventData, DataReadyEventData
+
+try:
+    # just in case tango stuffs are not installed
+    from PyTango import EventType, EventData, DeviceProxy, AttrConfEventData, DataReadyEventData
+except:
+    pass
+
 from jupytango.task import Task
 
 

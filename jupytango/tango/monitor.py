@@ -6,7 +6,11 @@ from collections import deque
 import threading
 from six import iteritems, string_types
 
-import PyTango as tango
+try:
+    # just in case tango stuffs are not installed
+    import PyTango as tango
+except:
+    pass
 
 from bokeh.models import ColumnDataSource
 from bokeh.models import CustomJS

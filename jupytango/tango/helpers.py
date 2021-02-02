@@ -3,6 +3,7 @@ import time
 import numpy
 import PyTango as tango
 
+
 # ------------------------------------------------------------------------------
 TANGO_TYPES = {
     numpy.bool_: tango.DevBoolean,
