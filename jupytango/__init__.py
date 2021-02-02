@@ -1,6 +1,11 @@
 import logging
-import itango
-import jupytango.tango.magics
+
+try:
+    # just in case tango stuffs are not installed
+    import itango
+    import jupytango.tango.magics
+except:
+    pass
 
 # ------------------------------------------------------------------------------
 def load_ipython_extension(app):
