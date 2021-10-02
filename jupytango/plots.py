@@ -544,7 +544,6 @@ ScaleType = enum(
     'CHANNEL'
 )
 
-
 # ------------------------------------------------------------------------------
 class Scale(object):
     """a scale"""
@@ -864,18 +863,23 @@ class ScalarChannel(Channel):
                 data[sn] = si.pull_data()
                 if data[sn].has_error:
                     self._bad_source_cnt += 1
+                    #print("emitting error...")
                     self.emit_error(data[sn])
+                elif not data[sn].has_valid_data:
+                    continue
                 else:
                     time_buffer_len = data[sn].time_buffer.shape[0]
                     data_buffer_len = data[sn].buffer.shape[0]
                     if time_buffer_len != data_buffer_len:
                         self._bad_source_cnt += 1
                         data[sn].set_error(self, "ScalarChannel: datat source returned inconsistent buffers (time and data buffers must have same size)")
+                        #print("emitting error...")
                         self.emit_error(data[sn])
                     min_len = min(min_len, data[sn].buffer.shape[0] if data[sn].has_valid_data else 1)
                 if data[sn].has_valid_data:
                     self._hide_msg_label()
             if not self._bad_source_cnt and previous_bad_source_cnt:
+                #print("emitting recover...")
                 self.emit_recover()
             updated_data = dict()
             time_scale_set = False
