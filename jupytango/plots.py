@@ -46,6 +46,7 @@ from bokeh.models.tools import WheelZoomTool, SaveTool
 from bokeh.palettes import Plasma256
 from bokeh.plotting import figure
 from bokeh.plotting.figure import Figure
+import bokeh.util.version as BokehVersion
 import bokeh.events
 
 from jupytango.tools import *
@@ -378,7 +379,7 @@ class Channel(NotebookCellContent, DataStreamEventHandler):
 
 
 # ------------------------------------------------------------------------------
-class BoxSelectionManager(NotebookCellContent):
+class BoxSelectionManager(NotebookCellContent): #TODO: DEPRECATED/USELESS/TOBEREMOVED
     """BoxSelectTool manager"""
 
     repository = dict()
@@ -784,7 +785,8 @@ class ScalarChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        #fkwargs['output_backend'] = 'webgl'
+        if BokehVersion.base_version() > '2.4.0':
+            fkwargs['output_backend'] = 'webgl'
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
         fkwargs['toolbar_location'] = 'above'
@@ -976,7 +978,8 @@ class SpectrumChannel(Channel):
 
     def __setup_figure(self, **kwargs):
         fkwargs = dict()
-        #fkwargs['output_backend'] = 'webgl'
+        if BokehVersion.base_version() > '2.4.0':
+            fkwargs['output_backend'] = 'webgl'
         fkwargs['x_range'] = self._xsc.bokeh_range
         fkwargs['plot_width'] = kwargs.get('width', 950)
         fkwargs['plot_height'] = kwargs.get('height', 250)
@@ -1130,7 +1133,6 @@ class ImageChannel(Channel):
         self._xsc = None  # x scale
         self._ysc = None  # y scale
         self._ird = None  # image renderer
-        self._rrd = None  # rect renderer for hover trick
         self._itm = InteractionsManager()  # an InteractionsManager
         self._expected_image_shape = None
         self._current_image_shape = None
@@ -1152,64 +1154,12 @@ class ImageChannel(Channel):
         columns['image_shape_changed'] = [0]
         return ColumnDataSource(data=columns)
 
-    def __hover_callback(self):
-        return CustomJS(args=dict(cds=self._cds), code="""
-            var pxc = cb_data['geometry'].x
-            var pyc = cb_data['geometry'].y
-            //console.log('cursor@%d,%d', pxc, pyc)
-            var plt = cb_obj.document._all_models[cds.tags[0]]
-            var xrg = plt.x_range
-            var yrg = plt.y_range
-            var img = cds.data['image'][0]
-            var imw = cds.data['image_width'][0]
-            var imh = cds.data['image_height'][0]
-            var xst = Math.abs(plt.x_range.end - plt.x_range.start) / imw
-            var yst = Math.abs(plt.y_range.end - plt.y_range.start) / imh
-            var pxi = Math.floor(Math.abs(pxc - plt.x_range.start) / xst)
-            var pyi = Math.floor(Math.abs(pyc - plt.y_range.start) / yst)
-            var isc = cds.data['image_shape_changed'][0]
-            if (isc != 0) {
-                var ixrg = cds.data['initial_x_range'][0]
-                //console.log(ixrg)
-                xrg._initial_start = ixrg[0]
-                xrg._initial_end = ixrg[1]
-                var iyrg = cds.data['initial_y_range'][0]
-                //console.log(iyrg)
-                yrg._initial_start = iyrg[0]
-                yrg._initial_end = iyrg[1]
-            }
-            var flatten_pti = pxi + pyi * imw
-            //var flatten_array_len = pxi + pyi * imw
-            //console.log(xrg)
-            //console.log(yrg)
-            //console.log('x-step = ', xst)
-            //console.log('y-step = ', yst)
-            //console.log('img.dims = (%d, %d)', imw, imh)
-            //console.log('flatten img. dims. = %d', imw * imh)
-            //console.log('flatten img. len = %d', img.length)
-            //console.log('flatten point index = %d', flatten_pti)
-            cds.data['x_hover'][0] = pxc
-            cds.data['y_hover'][0] = pyc
-            if (flatten_pti < img.length) {
-                cds.data['z_hover'][0] = img[Math.floor(pxi + pyi * imw)]
-            }
-            else {
-                cds.data['z_hover'][0] = NaN
-            }
-            //console.log('x, y, z = %f, %f, %f', pxc, pyc, cds.data['z_hover'][0])
-            cds.change.emit()
-        """)
-
     def __setup_toolbar(self, figure, w=0, h=0):
-        hrd = [self._rrd]
-        hcb = self.__hover_callback()
-        htt = [('x,y,z', '@x_hover{0.00},@y_hover{0.00},@z_hover{0.00}')]
-        hpp = 'follow_mouse'
+        htt = [('x','$x'), ('y','$y'), ('z','@image')]
         figure.add_tools(BoxZoomTool())
-        figure.add_tools(BoxSelectTool())
         figure.add_tools(ResetTool())
         figure.add_tools(SaveTool())
-        figure.add_tools(HoverTool(tooltips=htt, renderers=hrd, point_policy=hpp, callback=hcb))
+        figure.add_tools(HoverTool(tooltips=htt))
         figure.add_tools(CrosshairTool())
         figure.toolbar.logo = None
         figure.toolbar.active_drag = None
@@ -1239,7 +1189,8 @@ class ImageChannel(Channel):
             # self.__setup_undefined_scales(self._expected_image_shape) #TODO: add an option for that
             fkwargs = dict()
             fkwargs['name'] = str(kwargs.get('uid', self.uid))
-            #fkwargs['output_backend'] = 'webgl'
+            if BokehVersion.base_version() > '2.4.0':
+                fkwargs['output_backend'] = 'webgl'
             xrg = Range1d()  # self._xsc.bokeh_range
             yrg = Range1d()  # self._ysc.bokeh_range
             # print("ImageChannel.{}:set initial x-range to ({:.04f}, {:.04f})".format(self.name, xrg.start, xrg.end))
@@ -1265,15 +1216,6 @@ class ImageChannel(Channel):
             ikwargs['source'] = self._cds
             ikwargs['color_mapper'] = LinearColorMapper(palette=props.get('palette', Plasma256))
             self._ird = f.image(**ikwargs)
-            rkwargs = dict()
-            rkwargs['x'] = 0
-            rkwargs['y'] = 0
-            rkwargs['width'] = 0
-            rkwargs['height'] = 0
-            rkwargs['fill_alpha'] = 0
-            rkwargs['line_alpha'] = 0
-            rkwargs['source'] = self._cds
-            self._rrd = f.rect(**rkwargs)
             f.xgrid.grid_line_color = None
             f.ygrid.grid_line_color = None
             self._show_msg_label(f)
@@ -1481,14 +1423,12 @@ class ImageChannel(Channel):
                 self._mdl.x_range.update(start=xss, end=xse)
                 self._mdl.y_range.update(start=yss, end=yse)
                 self._ird.glyph.update(x=xss, y=yss, dw=w, dh=h)
-                self._rrd.glyph.update(x=xss + w / 2, y=yss + (sign * h / 2), width=w, height=h)
             else:
                 x = self._mdl.x_range.start
                 y = self._mdl.y_range.start
                 dw = abs(self._mdl.x_range.end - self._mdl.x_range.start)
                 dh = abs(self._mdl.y_range.end - self._mdl.y_range.start)
                 self._ird.glyph.update(x=x, y=y, dw=dw, dh=dh)
-                self._rrd.glyph.update(x=x + dw / 2, y=y + (sign * dh / 2), width=dw, height=dh)
             if not empty_buffer:
                 image = self.__extract_image_for_current_ranges(incoming_image)
             else:
