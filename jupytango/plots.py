@@ -53,7 +53,19 @@ from jupytango.tools import *
 from jupytango.datasource import *
 from jupytango.session import BokehSession
         
-from skimage.transform import rescale
+rescaler = None 
+try:
+    import cv2
+    has_opencv = True
+    rescaler = cv2.resize
+except:
+    has_opencv = False
+    try:
+        import skimage.transform
+        rescaler = skimage.transform.rescale 
+        has_skimage = True
+    except:
+        has_skimage = False
 
 # ------------------------------------------------------------------------------
 module_logger = logging.getLogger(__name__)
@@ -1315,7 +1327,7 @@ class ImageChannel(Channel):
         image = image if not self._options['upsidedown'] else image[::-1]
         # print("shape of extracted image from buffer {}".format(image.shape))
         # print("extract_image_for_current_ranges.sub_image.shape: {}".format(image.shape))
-        need_rescale, rescaling_factor = self.__compute_rescaling_factor(image)
+        need_rescale, rescaling_factor = (False, 0) if rescaler is not None else self.__compute_rescaling_factor(image)
         if need_rescale:
             image = self.__rescale_image(image, rescaling_factor)
             # print("extract_image_for_current_ranges.sub_image.rescaled to {}".format(image.shape))
@@ -1343,7 +1355,12 @@ class ImageChannel(Channel):
 
     def __rescale_image(self, in_img, rescaling_factor):
         # print('rescale-image: in shape {}'.format(in_img.shape))
-        out_img = rescale(in_img, rescaling_factor, mode='constant', cval=np.nan)
+        if has_opencv:
+            width = int(in_img.shape[1] * rescaling_factor)
+            height = int(in_img.shape[0] * rescaling_factor)
+            out_img = rescaler(in_img, (width, height), interpolation=cv2.INTER_CUBIC)
+        else:
+            out_img = rescaler(in_img, rescaling_factor, mode='constant', cval=np.nan)
         # print('rescale-image: out shape {}'.format(out_img.shape))
         return out_img
 
