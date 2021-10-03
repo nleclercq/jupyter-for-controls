@@ -6,11 +6,7 @@ from collections import deque
 import threading
 from six import iteritems, string_types
 
-try:
-    # just in case tango stuffs are not installed
-    import PyTango as tango
-except:
-    pass
+import PyTango as tango
 
 from bokeh.models import ColumnDataSource
 from bokeh.models import CustomJS
@@ -28,6 +24,7 @@ from jupytango.tango.datasource import *
 
 # ------------------------------------------------------------------------------
 module_logger = logging.getLogger(__name__)
+#module_logger.setLevel(logging.DEBUG)
 
 # ------------------------------------------------------------------------------
 bokeh_redirected = False

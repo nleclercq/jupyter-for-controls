@@ -5,11 +5,7 @@ from collections import deque
 import threading
 from six import iteritems, string_types
 
-try:
-    # just in case tango stuffs are not installed
-    import PyTango as tango
-except:
-    pass
+import PyTango as tango
 
 from jupytango.datasource import *
 from jupytango.tango.eventsconsumer import TangoEventSubscriptionForm, TangoEventsConsumer

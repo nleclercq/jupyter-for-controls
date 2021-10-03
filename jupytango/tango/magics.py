@@ -7,11 +7,7 @@ from IPython.core.page import page
 from IPython.core.magic import Magics, magics_class, line_magic
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring, argument_group, UsageError
 
-try:
-    # just in case tango stuffs are not installed
-    import PyTango as tango
-except:
-    pass
+import PyTango as tango
 
 from jupytango.tools import silent_catch
 from jupytango.tango.monitor import open_tango_monitor, plot_tango_attribute
