@@ -16,8 +16,6 @@ This notebook belongs to a series of small projects which aim is to evaluate the
 Experiments control requires both static and dynamic (i.e live) data visualization. Since Jupyter doesn't provide any 'official' data visualization solution, we need to select one. Among the available solutions, [bokeh](http://bokeh.pydata.org/en/latest) presents the highest potential for our application.
 
 ## jupyTango installation
-Here is a step by step jupyTango installation procedure.
-
 **the offcial jupyTango repo is now:  https://gitlab.com/tango-controls/jupyTango**
 
 Enjoy!
