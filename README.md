@@ -7,7 +7,6 @@ Small projects, evaluations, POC, presentations, ... related to the Jupyter Ecos
 ### **leveraging pytango, itango and bokeh features in the Jupyter notebook**
 
 ## About this notebook
-
 This notebook belongs to a series of small projects which aim is to evaluate the [Jupyter](http://jupyter.org/) ecosystem for science experiments control. The main idea is to use the _Juypter notebook_ as a convergence platform in order to offer a fully featured environment to scientists. 
 
 ## About Tango 
@@ -15,9 +14,6 @@ This notebook belongs to a series of small projects which aim is to evaluate the
 
 ## About bokeh
 Experiments control requires both static and dynamic (i.e live) data visualization. Since Jupyter doesn't provide any 'official' data visualization solution, we need to select one. Among the available solutions, [bokeh](http://bokeh.pydata.org/en/latest) presents the highest potential for our application.
-
-## Topic of the day
-This notebook is a tutorial on "How to provide amazing Tango releated features in jupyterlab"
 
 ## jupyTango installation
 Here is a step by step jupyTango installation procedure.
