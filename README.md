@@ -1,6 +1,8 @@
 # **jupyter-for-controls**
 Small projects, evaluations, POC, presentations, ... related to the Jupyter Ecosystem (and 'embeddable' technologies, e.g. bokeh) for controls. The main goal is to turn jupyter into a [Tango](https://www.tango-controls.org) feature-rich client plateform.  
 
+![b4nb](https://github.com/nleclercq/jupyter-for-controls/blob/master/bokeh-data-streaming-for-notebook/b4nb.gif)
+
 # **Installing jupyTango on Ubuntu Linux**
 ### **leveraging pytango, itango and bokeh features in the Jupyter notebook**
 
