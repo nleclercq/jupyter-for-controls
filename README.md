@@ -17,6 +17,7 @@ Experiments control requires both static and dynamic (i.e live) data visualizati
 
 ## jupyTango installation
 Here is a step by step jupyTango installation procedure.
-**EDIT: the offcial jupyTango repo is now:  https://github.com/tango-controls/jupyTango**
+
+**the offcial jupyTango repo is now:  https://github.com/tango-controls/jupyTango**
 
 Enjoy!
